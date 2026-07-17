@@ -886,7 +886,8 @@ class RunningCommand:
                 except UnicodeDecodeError:
                     return chunk
 
-    # ARCHITECTURE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-006:
+    # ARCHITECTURE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-004,
+    # AWAITCMD-006, AWAITCMD-009:
     # This is the sole async result boundary for a RunningCommand. Command.__call__
     # owns opt-in and instance creation; this boundary depends on the existing
     # completion signal and wait() finalizer, then preserves either the legacy str
@@ -894,7 +895,8 @@ class RunningCommand:
     def __await__(
         self,
     ) -> Generator[Any, None, Union[str, "RunningCommand"]]:
-        # PSEUDOCODE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-006:
+        # PSEUDOCODE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-004,
+        # AWAITCMD-006, AWAITCMD-009:
         # INPUT: this RunningCommand and its call_args["return_cmd"] opt-in.
         # AWAIT the asynchronous output-complete signal before producing a result.
         # FINALIZE this same execution through wait(), preserving its existing
@@ -903,7 +905,11 @@ class RunningCommand:
         #     RETURN this same RunningCommand instance, whose completed-command
         #     attributes (including stdout) now describe the awaited execution.
         # ELSE:
+        #     PRESERVE the non-opted-in completion transition performed by wait().
         #     RETURN the existing string representation of the completed command.
+        # ON completion, timeout, or command-exit failure:
+        #     PRESERVE the existing wait() result or propagated exception; the
+        #     absent opt-in changes neither execution nor failure handling.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
             self.wait()
@@ -1522,6 +1528,18 @@ class Command:
         if output_redirect_is_filename(stderr):
             stderr = open(str(stderr), "wb")
 
+        # PSEUDOCODE AWAITCMD-009:
+        # INPUT: normalized call_args, where return_cmd remains false unless the
+        # caller explicitly opts in.
+        # CREATE one RunningCommand through the existing execution path; choose
+        # synchronous waiting, asynchronous completion, iteration, piping, or
+        # background handling only from their established call arguments.
+        # IF that execution already spawned and waited AND return_cmd is false:
+        #     HAND OFF its existing string representation to the caller.
+        # ELSE:
+        #     HAND OFF the same RunningCommand for its established completion path;
+        #     when directly awaited without opt-in, __await__ returns its string.
+        # PROPAGATE creation, completion, timeout, and exit failures unchanged.
         rc = self.__class__.RunningCommandCls(cmd, call_args, stdin, stdout, stderr)
         if rc._spawned_and_waited and not call_args["return_cmd"]:
             return str(rc)

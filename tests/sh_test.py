@@ -1965,7 +1965,15 @@ print("hello")
 
     def test_AWAITCMD_008_non_awaited_return_cmd_returns_running_command(self):
         """AWAITCMD-008: ordinary non-awaited opt-in preserves RunningCommand."""
-        self.assertTrue(True)
+        direct_result = system_python(
+            "-c", "print('direct ordinary result')", _return_cmd=True
+        )
+        baked_result = python("-c", "print('baked ordinary result')")
+
+        self.assertIsInstance(direct_result, sh.RunningCommand)
+        self.assertEqual(direct_result.stdout, b"direct ordinary result\n")
+        self.assertIsInstance(baked_result, sh.RunningCommand)
+        self.assertEqual(baked_result.stdout, b"baked ordinary result\n")
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

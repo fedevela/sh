@@ -1610,7 +1610,9 @@ class Command:
         #         different result merely because return_cmd was enabled.
         # PROPAGATE creation, completion, timeout, and exit failures unchanged.
         rc = self.__class__.RunningCommandCls(cmd, call_args, stdin, stdout, stderr)
-        if rc._spawned_and_waited and not call_args["return_cmd"]:
+        if call_args["return_cmd"]:
+            return rc
+        elif rc._spawned_and_waited:
             return str(rc)
         else:
             return rc

@@ -887,6 +887,16 @@ class RunningCommand:
                     return chunk
 
     def __await__(self):
+        # PSEUDOCODE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-006:
+        # INPUT: this RunningCommand and its call_args["return_cmd"] opt-in.
+        # AWAIT the asynchronous output-complete signal before producing a result.
+        # FINALIZE this same execution through wait(), preserving its existing
+        # completion state and propagating timeout or command-exit failures.
+        # IF return_cmd is enabled:
+        #     RETURN this same RunningCommand instance, whose completed-command
+        #     attributes (including stdout) now describe the awaited execution.
+        # ELSE:
+        #     RETURN the existing string representation of the completed command.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
             return str(self)

@@ -1579,6 +1579,11 @@ class Command:
         # passes the normalized opt-in state into the execution owner; result
         # selection remains at this synchronous handoff and at __await__ for a
         # directly awaited RunningCommand, with no compatibility adapter layer.
+        # AWAITCMD-008 assigns ordinary return-type ownership to Command.__call__:
+        # this handoff may depend on the constructed RunningCommand and normalized
+        # call arguments, but it must not delegate back through RunningCommand's
+        # downstream await boundary.  The existing branch below is therefore the
+        # sole synchronous compatibility seam for the non-awaited contract.
         #
         # PSEUDOCODE AWAITCMD-005, AWAITCMD-008, AWAITCMD-009:
         # INPUT: normalized call_args, where return_cmd remains false unless the

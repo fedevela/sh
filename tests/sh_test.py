@@ -1730,19 +1730,52 @@ print("hello")
 
     def test_AWAITCMD_001_direct_await_with_return_cmd_returns_running_command(self):
         """AWAITCMD-001: opted-in direct await returns a RunningCommand."""
-        self.assertTrue(True)
+        async def main():
+            return await python("-c", "print('complete')", _return_cmd=True)
+
+        result = asyncio.run(main())
+        self.assertIsInstance(result, sh.RunningCommand)
 
     def test_AWAITCMD_002_direct_await_returns_same_awaited_execution(self):
         """AWAITCMD-002: the result represents the execution that was awaited."""
-        self.assertTrue(True)
+        async def main():
+            running = python("-c", "print('same execution')", _return_cmd=True)
+            return running, await running
+
+        running, result = asyncio.run(main())
+        self.assertIs(result, running)
 
     def test_AWAITCMD_003_direct_await_resolves_after_execution_completes(self):
         """AWAITCMD-003: opted-in direct await waits for command completion."""
-        self.assertTrue(True)
+        async def main():
+            running = python(
+                "-c",
+                "import time; time.sleep(0.1); print('done')",
+                _async=True,
+                _return_cmd=True,
+            )
+
+            async def observe_running_execution():
+                self.assertTrue(running.is_alive())
+                await asyncio.sleep(0.2)
+
+            observer = asyncio.create_task(observe_running_execution())
+            result = await running
+            await observer
+            return result, result.is_alive()
+
+        result, was_alive_when_await_resolved = asyncio.run(main())
+        self.assertFalse(was_alive_when_await_resolved)
+        self.assertTrue(result._waited_until_completion)
 
     def test_AWAITCMD_006_awaited_command_exposes_completed_attributes_and_stdout(self):
         """AWAITCMD-006: the completed result exposes attributes and stdout."""
-        self.assertTrue(True)
+        async def main():
+            return await python("-c", "print('awaited output')", _return_cmd=True)
+
+        result = asyncio.run(main())
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.stdout, b"awaited output\n")
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

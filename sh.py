@@ -906,6 +906,9 @@ class RunningCommand:
         #     RETURN the existing string representation of the completed command.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
+            self.wait()
+            if self.call_args["return_cmd"]:
+                return self
             return str(self)
 
         return wait_for_completion().__await__()

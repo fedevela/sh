@@ -887,11 +887,13 @@ class RunningCommand:
                     return chunk
 
     # ARCHITECTURE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-004,
-    # AWAITCMD-005, AWAITCMD-006, AWAITCMD-009:
+    # AWAITCMD-005, AWAITCMD-006, AWAITCMD-007, AWAITCMD-009:
     # This is the sole async result boundary for a RunningCommand. Command.__call__
     # owns opt-in and instance creation; this boundary depends on the existing
     # completion signal and wait() finalizer, then preserves either the legacy str
     # contract or the same opted-in RunningCommand without an adapter or copy.
+    # wait() and handle_command_exit_code() retain ownership of exit-status failure;
+    # return_cmd is only a successful-result contract after that failure boundary.
     def __await__(
         self,
     ) -> Generator[Any, None, Union[str, "RunningCommand"]]:

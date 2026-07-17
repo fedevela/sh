@@ -896,7 +896,7 @@ class RunningCommand:
         self,
     ) -> Generator[Any, None, Union[str, "RunningCommand"]]:
         # PSEUDOCODE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-004,
-        # AWAITCMD-005, AWAITCMD-006, AWAITCMD-009:
+        # AWAITCMD-005, AWAITCMD-006, AWAITCMD-007, AWAITCMD-009:
         # INPUT: this RunningCommand and its call_args["return_cmd"] opt-in.
         # AWAIT the asynchronous output-complete signal before producing a result.
         # FINALIZE this same execution through wait(), preserving its existing
@@ -912,6 +912,18 @@ class RunningCommand:
         # ON completion, timeout, or command-exit failure:
         #     PRESERVE the existing wait() result or propagated exception; the
         #     absent opt-in changes neither execution nor failure handling.
+        # AWAITCMD-007 FAILURE FLOW:
+        #     AFTER the output-complete signal, CALL wait() before inspecting
+        #     return_cmd or selecting either successful await result.
+        #     LET wait() obtain and retain the execution's existing exit status,
+        #     classify it through the established acceptable-code rules, and
+        #     construct the established command failure when classification fails.
+        #     IF wait() raises that failure:
+        #         PROPAGATE the same failure and its exit status to the awaiter.
+        #         DO NOT reach the return_cmd result-selection branch; therefore
+        #         false and true opt-in states have identical await failure flow.
+        #     ELSE:
+        #         CONTINUE to the existing return_cmd result-selection branch.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
             self.wait()

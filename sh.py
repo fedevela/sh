@@ -1402,6 +1402,10 @@ class Command:
         overridden in __call__ or in subsequent bakes (basically setting
         defaults)"""
 
+        # ARCHITECTURE AWAITCMD-005:
+        # Command owns reusable baked defaults, including return_cmd.  This
+        # boundary may produce another Command but must not own or retain a
+        # RunningCommand; execution identity begins only at Command.__call__.
         # PSEUDOCODE AWAITCMD-005 (baked opt-in propagation):
         # INPUT: this Command's existing baked defaults plus the new bake arguments.
         # EXTRACT special call arguments, including return_cmd when explicitly given.
@@ -1479,6 +1483,11 @@ class Command:
         # special kwargs from the possibly baked command
         extracted_call_args, kwargs = self._extract_call_args(kwargs)
 
+        # ARCHITECTURE AWAITCMD-005:
+        # Command.__call__ is the option-resolution boundary between reusable
+        # baked configuration and per-execution state.  Its local call_args is
+        # the contract passed into exactly one new RunningCommand; neither that
+        # mapping nor the resulting execution flows back into the baked Command.
         # PSEUDOCODE AWAITCMD-005 (per-execution option resolution):
         # INPUT: global call defaults, this Command's baked defaults, and special
         # arguments supplied for this invocation.
@@ -1551,7 +1560,7 @@ class Command:
         if output_redirect_is_filename(stderr):
             stderr = open(str(stderr), "wb")
 
-        # ARCHITECTURE AWAITCMD-004, AWAITCMD-009:
+        # ARCHITECTURE AWAITCMD-004, AWAITCMD-005, AWAITCMD-009:
         # This is the existing Command-to-RunningCommand integration seam. It
         # passes the normalized opt-in state into the execution owner; result
         # selection remains at this synchronous handoff and at __await__ for a

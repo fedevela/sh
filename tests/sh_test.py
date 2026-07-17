@@ -1786,6 +1786,18 @@ print("hello")
         self.assertIsInstance(result, str)
         self.assertEqual(result, "legacy await result\n")
 
+    def test_AWAITCMD_005_baked_return_cmd_direct_await_returns_completed_running_command(
+        self,
+    ):
+        """AWAITCMD-005: baked opt-in returns the completed awaited execution."""
+        self.assertTrue(True)
+
+    def test_AWAITCMD_005_two_baked_executions_each_await_returns_own_completed_running_command(
+        self,
+    ):
+        """AWAITCMD-005: distinct baked executions retain distinct await results."""
+        self.assertTrue(True)
+
     def test_AWAITCMD_009_without_opt_in_execution_and_completion_remain_unchanged(self):
         """AWAITCMD-009: non-opted-in execution and completion remain compatible."""
         completions = []

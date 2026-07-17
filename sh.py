@@ -1291,6 +1291,10 @@ class Command:
         "pass_fds": set(),
         # return an instance of RunningCommand always. if this isn't True, then
         # sometimes we may return just a plain unicode string
+        # ARCHITECTURE AWAITCMD-004, AWAITCMD-009:
+        # Command owns the opt-in default at the call-argument boundary. Keeping
+        # it false routes non-opted-in calls through the established result and
+        # completion contracts; RunningCommand.__await__ owns the async result.
         "return_cmd": False,
         "async": False,
     }
@@ -1528,6 +1532,12 @@ class Command:
         if output_redirect_is_filename(stderr):
             stderr = open(str(stderr), "wb")
 
+        # ARCHITECTURE AWAITCMD-004, AWAITCMD-009:
+        # This is the existing Command-to-RunningCommand integration seam. It
+        # passes the normalized opt-in state into the execution owner; result
+        # selection remains at this synchronous handoff and at __await__ for a
+        # directly awaited RunningCommand, with no compatibility adapter layer.
+        #
         # PSEUDOCODE AWAITCMD-009:
         # INPUT: normalized call_args, where return_cmd remains false unless the
         # caller explicitly opts in.

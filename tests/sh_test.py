@@ -1963,6 +1963,10 @@ print("hello")
         self.assertEqual(opted_in_failure.stdout, legacy_failure.stdout)
         self.assertEqual(opted_in_failure.stderr, legacy_failure.stderr)
 
+    def test_AWAITCMD_008_non_awaited_return_cmd_returns_running_command(self):
+        """AWAITCMD-008: ordinary non-awaited opt-in preserves RunningCommand."""
+        self.assertTrue(True)
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

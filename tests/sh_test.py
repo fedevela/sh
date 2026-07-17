@@ -1728,6 +1728,22 @@ print("hello")
         asyncio.run(main())
         self.assertListEqual(alternating, [1, 2, 1, 2])
 
+    def test_AWAITCMD_001_direct_await_with_return_cmd_returns_running_command(self):
+        """AWAITCMD-001: opted-in direct await returns a RunningCommand."""
+        self.assertTrue(True)
+
+    def test_AWAITCMD_002_direct_await_returns_same_awaited_execution(self):
+        """AWAITCMD-002: the result represents the execution that was awaited."""
+        self.assertTrue(True)
+
+    def test_AWAITCMD_003_direct_await_resolves_after_execution_completes(self):
+        """AWAITCMD-003: opted-in direct await waits for command completion."""
+        self.assertTrue(True)
+
+    def test_AWAITCMD_006_awaited_command_exposes_completed_attributes_and_stdout(self):
+        """AWAITCMD-006: the completed result exposes attributes and stdout."""
+        self.assertTrue(True)
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

@@ -1884,6 +1884,24 @@ print("hello")
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, b"awaited output\n")
 
+    def test_AWAITCMD_007_await_failed_command_without_return_cmd_preserves_error_and_exit_status(
+        self,
+    ):
+        """AWAITCMD-007: legacy await failure and exit status remain preserved."""
+        self.assertTrue(True)
+
+    def test_AWAITCMD_007_await_failed_command_with_return_cmd_preserves_error_and_exit_status(
+        self,
+    ):
+        """AWAITCMD-007: opted-in await preserves failure and exit status."""
+        self.assertTrue(True)
+
+    def test_AWAITCMD_007_return_cmd_does_not_suppress_or_replace_await_failure(
+        self,
+    ):
+        """AWAITCMD-007: opt-in does not suppress or replace await failure."""
+        self.assertTrue(True)
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

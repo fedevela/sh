@@ -1574,13 +1574,13 @@ class Command:
         if output_redirect_is_filename(stderr):
             stderr = open(str(stderr), "wb")
 
-        # ARCHITECTURE AWAITCMD-004, AWAITCMD-005, AWAITCMD-009:
+        # ARCHITECTURE AWAITCMD-004, AWAITCMD-005, AWAITCMD-008, AWAITCMD-009:
         # This is the existing Command-to-RunningCommand integration seam. It
         # passes the normalized opt-in state into the execution owner; result
         # selection remains at this synchronous handoff and at __await__ for a
         # directly awaited RunningCommand, with no compatibility adapter layer.
         #
-        # PSEUDOCODE AWAITCMD-005, AWAITCMD-009:
+        # PSEUDOCODE AWAITCMD-005, AWAITCMD-008, AWAITCMD-009:
         # INPUT: normalized call_args, where return_cmd remains false unless the
         # caller explicitly opts in directly or through a baked command default.
         # CREATE one new RunningCommand for this invocation through the existing
@@ -1593,6 +1593,16 @@ class Command:
         #     HAND OFF this execution's own RunningCommand for its established
         #     completion path; when directly awaited, __await__ selects this
         #     execution's result according to its resolved return_cmd value.
+        # AWAITCMD-008 ORDINARY NON-AWAITED FLOW:
+        #     IF the resolved return_cmd value is true:
+        #         RETURN the newly created RunningCommand directly, regardless of
+        #         whether its constructor already spawned and waited for completion.
+        #         DO NOT invoke its await protocol or convert it to a string.
+        #     THEREFORE the caller receives a RunningCommand before making any
+        #     separate choice to await, inspect, or otherwise consume that object.
+        #     IF creation or ordinary completion fails before this handoff:
+        #         PROPAGATE the established failure unchanged; do not synthesize a
+        #         different result merely because return_cmd was enabled.
         # PROPAGATE creation, completion, timeout, and exit failures unchanged.
         rc = self.__class__.RunningCommandCls(cmd, call_args, stdin, stdout, stderr)
         if rc._spawned_and_waited and not call_args["return_cmd"]:

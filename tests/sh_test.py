@@ -1884,23 +1884,84 @@ print("hello")
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, b"awaited output\n")
 
+    async def _await_with_process_observer(self, running):
+        async def observe_process():
+            while not running.aio_output_complete.is_set():
+                running.is_alive()
+                await asyncio.sleep(0.01)
+
+        observer = asyncio.create_task(observe_process())
+        try:
+            return await running
+        finally:
+            await observer
+
     def test_AWAITCMD_007_await_failed_command_without_return_cmd_preserves_error_and_exit_status(
         self,
     ):
         """AWAITCMD-007: legacy await failure and exit status remain preserved."""
-        self.assertTrue(True)
+        async def main():
+            running = pythons(
+                "-c",
+                "import sys; print('legacy stdout'); "
+                "print('legacy stderr', file=sys.stderr); sys.exit(23)",
+                _async=True,
+            )
+            return await self._await_with_process_observer(running)
+
+        with self.assertRaises(sh.ErrorReturnCode_23) as raised:
+            asyncio.run(main())
+
+        self.assertEqual(raised.exception.exit_code, 23)
+        self.assertEqual(raised.exception.stdout, b"legacy stdout\n")
+        self.assertEqual(raised.exception.stderr, b"legacy stderr\n")
 
     def test_AWAITCMD_007_await_failed_command_with_return_cmd_preserves_error_and_exit_status(
         self,
     ):
         """AWAITCMD-007: opted-in await preserves failure and exit status."""
-        self.assertTrue(True)
+        async def main():
+            running = python(
+                "-c",
+                "import sys; print('opted-in stdout'); "
+                "print('opted-in stderr', file=sys.stderr); sys.exit(24)",
+                _async=True,
+                _return_cmd=True,
+            )
+            return await self._await_with_process_observer(running)
+
+        with self.assertRaises(sh.ErrorReturnCode_24) as raised:
+            asyncio.run(main())
+
+        self.assertEqual(raised.exception.exit_code, 24)
+        self.assertEqual(raised.exception.stdout, b"opted-in stdout\n")
+        self.assertEqual(raised.exception.stderr, b"opted-in stderr\n")
 
     def test_AWAITCMD_007_return_cmd_does_not_suppress_or_replace_await_failure(
         self,
     ):
         """AWAITCMD-007: opt-in does not suppress or replace await failure."""
-        self.assertTrue(True)
+        async def fail(return_cmd):
+            running = system_python(
+                "-c",
+                "import sys; print('same stdout'); "
+                "print('same stderr', file=sys.stderr); sys.exit(25)",
+                _async=True,
+                _return_cmd=return_cmd,
+            )
+            return await self._await_with_process_observer(running)
+
+        failures = []
+        for return_cmd in (False, True):
+            with self.assertRaises(sh.ErrorReturnCode_25) as raised:
+                asyncio.run(fail(return_cmd))
+            failures.append(raised.exception)
+
+        legacy_failure, opted_in_failure = failures
+        self.assertIs(type(opted_in_failure), type(legacy_failure))
+        self.assertEqual(opted_in_failure.exit_code, legacy_failure.exit_code)
+        self.assertEqual(opted_in_failure.stdout, legacy_failure.stdout)
+        self.assertEqual(opted_in_failure.stderr, legacy_failure.stderr)
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

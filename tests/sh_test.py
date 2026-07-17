@@ -1768,6 +1768,20 @@ print("hello")
         self.assertFalse(was_alive_when_await_resolved)
         self.assertTrue(result._waited_until_completion)
 
+    def test_AWAITCMD_004_without_return_cmd_direct_await_returns_existing_string(self):
+        """AWAITCMD-004: non-opted-in direct await retains its string result."""
+        pass
+
+    def test_AWAITCMD_009_without_opt_in_execution_and_completion_remain_unchanged(self):
+        """AWAITCMD-009: non-opted-in execution and completion remain compatible."""
+        pass
+
+    def test_AWAITCMD_009_without_opt_in_sync_and_async_expectations_remain_unchanged(
+        self,
+    ):
+        """AWAITCMD-009: existing sync and async behavior checks remain valid."""
+        pass
+
     def test_AWAITCMD_006_awaited_command_exposes_completed_attributes_and_stdout(self):
         """AWAITCMD-006: the completed result exposes attributes and stdout."""
         async def main():

@@ -73,7 +73,7 @@ from locale import getpreferredencoding
 from queue import Empty, Queue
 from shlex import quote as shlex_quote
 from types import GeneratorType, ModuleType
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, Generator, Type, Union
 
 __project_url__ = "https://github.com/amoffat/sh"
 
@@ -886,7 +886,14 @@ class RunningCommand:
                 except UnicodeDecodeError:
                     return chunk
 
-    def __await__(self):
+    # ARCHITECTURE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-006:
+    # This is the sole async result boundary for a RunningCommand. Command.__call__
+    # owns opt-in and instance creation; this boundary depends on the existing
+    # completion signal and wait() finalizer, then preserves either the legacy str
+    # contract or the same opted-in RunningCommand without an adapter or copy.
+    def __await__(
+        self,
+    ) -> Generator[Any, None, Union[str, "RunningCommand"]]:
         # PSEUDOCODE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-006:
         # INPUT: this RunningCommand and its call_args["return_cmd"] opt-in.
         # AWAIT the asynchronous output-complete signal before producing a result.

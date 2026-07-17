@@ -1770,17 +1770,75 @@ print("hello")
 
     def test_AWAITCMD_004_without_return_cmd_direct_await_returns_existing_string(self):
         """AWAITCMD-004: non-opted-in direct await retains its string result."""
-        pass
+        async def main():
+            running = pythons("-c", "print('legacy await result')", _async=True)
+
+            async def keep_loop_responsive():
+                while not running.aio_output_complete.is_set():
+                    await asyncio.sleep(0.01)
+
+            heartbeat = asyncio.create_task(keep_loop_responsive())
+            result = await running
+            await heartbeat
+            return result
+
+        result = asyncio.run(main())
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "legacy await result\n")
 
     def test_AWAITCMD_009_without_opt_in_execution_and_completion_remain_unchanged(self):
         """AWAITCMD-009: non-opted-in execution and completion remain compatible."""
-        pass
+        completions = []
+
+        def done(running, success, exit_code):
+            completions.append((running, success, exit_code))
+
+        async def main():
+            running = pythons(
+                "-c",
+                "print('completed normally')",
+                _async=True,
+                _done=done,
+            )
+
+            async def keep_loop_responsive():
+                while not running.aio_output_complete.is_set():
+                    await asyncio.sleep(0.01)
+
+            heartbeat = asyncio.create_task(keep_loop_responsive())
+            result = await running
+            await heartbeat
+            return running, result
+
+        running, result = asyncio.run(main())
+        self.assertEqual(result, "completed normally\n")
+        self.assertTrue(running._waited_until_completion)
+        self.assertFalse(running.is_alive())
+        self.assertEqual(completions, [(running, True, 0)])
 
     def test_AWAITCMD_009_without_opt_in_sync_and_async_expectations_remain_unchanged(
         self,
     ):
         """AWAITCMD-009: existing sync and async behavior checks remain valid."""
-        pass
+        sync_result = pythons("-c", "print('sync result')")
+
+        async def get_async_result():
+            running = pythons("-c", "print('async result')", _async=True)
+
+            async def keep_loop_responsive():
+                while not running.aio_output_complete.is_set():
+                    await asyncio.sleep(0.01)
+
+            heartbeat = asyncio.create_task(keep_loop_responsive())
+            result = await running
+            await heartbeat
+            return result
+
+        async_result = asyncio.run(get_async_result())
+        self.assertIsInstance(sync_result, str)
+        self.assertEqual(sync_result, "sync result\n")
+        self.assertIsInstance(async_result, str)
+        self.assertEqual(async_result, "async result\n")
 
     def test_AWAITCMD_006_awaited_command_exposes_completed_attributes_and_stdout(self):
         """AWAITCMD-006: the completed result exposes attributes and stdout."""

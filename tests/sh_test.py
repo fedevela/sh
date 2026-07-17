@@ -1790,13 +1790,36 @@ print("hello")
         self,
     ):
         """AWAITCMD-005: baked opt-in returns the completed awaited execution."""
-        self.assertTrue(True)
+        baked_python = system_python.bake(_return_cmd=True)
+
+        async def main():
+            return await baked_python("-c", "print('baked result')")
+
+        result = asyncio.run(main())
+        self.assertIsInstance(result, sh.RunningCommand)
+        self.assertFalse(result.is_alive())
+        self.assertTrue(result._waited_until_completion)
+        self.assertEqual(result.stdout, b"baked result\n")
 
     def test_AWAITCMD_005_two_baked_executions_each_await_returns_own_completed_running_command(
         self,
     ):
         """AWAITCMD-005: distinct baked executions retain distinct await results."""
-        self.assertTrue(True)
+        baked_python = system_python.bake(_return_cmd=True)
+
+        async def main():
+            first_result = await baked_python("-c", "print('first')")
+            second_result = await baked_python("-c", "print('second')")
+            return first_result, second_result
+
+        first_result, second_result = asyncio.run(main())
+        self.assertIsNot(first_result, second_result)
+        self.assertIsInstance(first_result, sh.RunningCommand)
+        self.assertIsInstance(second_result, sh.RunningCommand)
+        self.assertTrue(first_result._waited_until_completion)
+        self.assertTrue(second_result._waited_until_completion)
+        self.assertEqual(first_result.stdout, b"first\n")
+        self.assertEqual(second_result.stdout, b"second\n")
 
     def test_AWAITCMD_009_without_opt_in_execution_and_completion_remain_unchanged(self):
         """AWAITCMD-009: non-opted-in execution and completion remain compatible."""

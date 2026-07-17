@@ -73,7 +73,7 @@ from locale import getpreferredencoding
 from queue import Empty, Queue
 from shlex import quote as shlex_quote
 from types import GeneratorType, ModuleType
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, Generator, Type, Union
 
 __project_url__ = "https://github.com/amoffat/sh"
 
@@ -886,9 +886,51 @@ class RunningCommand:
                 except UnicodeDecodeError:
                     return chunk
 
-    def __await__(self):
+    # ARCHITECTURE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-004,
+    # AWAITCMD-005, AWAITCMD-006, AWAITCMD-007, AWAITCMD-009:
+    # This is the sole async result boundary for a RunningCommand. Command.__call__
+    # owns opt-in and instance creation; this boundary depends on the existing
+    # completion signal and wait() finalizer, then preserves either the legacy str
+    # contract or the same opted-in RunningCommand without an adapter or copy.
+    # wait() and handle_command_exit_code() retain ownership of exit-status failure;
+    # return_cmd is only a successful-result contract after that failure boundary.
+    def __await__(
+        self,
+    ) -> Generator[Any, None, Union[str, "RunningCommand"]]:
+        # PSEUDOCODE AWAITCMD-001, AWAITCMD-002, AWAITCMD-003, AWAITCMD-004,
+        # AWAITCMD-005, AWAITCMD-006, AWAITCMD-007, AWAITCMD-009:
+        # INPUT: this RunningCommand and its call_args["return_cmd"] opt-in.
+        # AWAIT the asynchronous output-complete signal before producing a result.
+        # FINALIZE this same execution through wait(), preserving its existing
+        # completion state and propagating timeout or command-exit failures.
+        # IF return_cmd is enabled:
+        #     RETURN this same RunningCommand instance, whose completed-command
+        #     attributes (including stdout) now describe the awaited execution.
+        #     FOR a baked opt-in, use only this instance's resolved call_args;
+        #     distinct invocations therefore return their own completed instances.
+        # ELSE:
+        #     PRESERVE the non-opted-in completion transition performed by wait().
+        #     RETURN the existing string representation of the completed command.
+        # ON completion, timeout, or command-exit failure:
+        #     PRESERVE the existing wait() result or propagated exception; the
+        #     absent opt-in changes neither execution nor failure handling.
+        # AWAITCMD-007 FAILURE FLOW:
+        #     AFTER the output-complete signal, CALL wait() before inspecting
+        #     return_cmd or selecting either successful await result.
+        #     LET wait() obtain and retain the execution's existing exit status,
+        #     classify it through the established acceptable-code rules, and
+        #     construct the established command failure when classification fails.
+        #     IF wait() raises that failure:
+        #         PROPAGATE the same failure and its exit status to the awaiter.
+        #         DO NOT reach the return_cmd result-selection branch; therefore
+        #         false and true opt-in states have identical await failure flow.
+        #     ELSE:
+        #         CONTINUE to the existing return_cmd result-selection branch.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
+            self.wait()
+            if self.call_args["return_cmd"]:
+                return self
             return str(self)
 
         return wait_for_completion().__await__()
@@ -1265,6 +1307,10 @@ class Command:
         "pass_fds": set(),
         # return an instance of RunningCommand always. if this isn't True, then
         # sometimes we may return just a plain unicode string
+        # ARCHITECTURE AWAITCMD-004, AWAITCMD-009:
+        # Command owns the opt-in default at the call-argument boundary. Keeping
+        # it false routes non-opted-in calls through the established result and
+        # completion contracts; RunningCommand.__await__ owns the async result.
         "return_cmd": False,
         "async": False,
     }
@@ -1370,6 +1416,19 @@ class Command:
         overridden in __call__ or in subsequent bakes (basically setting
         defaults)"""
 
+        # ARCHITECTURE AWAITCMD-005:
+        # Command owns reusable baked defaults, including return_cmd.  This
+        # boundary may produce another Command but must not own or retain a
+        # RunningCommand; execution identity begins only at Command.__call__.
+        # PSEUDOCODE AWAITCMD-005 (baked opt-in propagation):
+        # INPUT: this Command's existing baked defaults plus the new bake arguments.
+        # EXTRACT special call arguments, including return_cmd when explicitly given.
+        # CREATE a new baked Command; do not attach execution state to either command.
+        # COPY prior baked defaults into the new command, then overlay newly extracted
+        # defaults so an explicit return_cmd value follows ordinary baking precedence.
+        # OUTPUT: an independently callable Command whose baked return_cmd default is
+        # applied to every invocation unless that invocation explicitly overrides it.
+        # PROPAGATE invalid special-argument failures from extraction unchanged.
         # construct the base Command
         fn = type(self)(self._path)
         fn._partial = True
@@ -1438,6 +1497,19 @@ class Command:
         # special kwargs from the possibly baked command
         extracted_call_args, kwargs = self._extract_call_args(kwargs)
 
+        # ARCHITECTURE AWAITCMD-005:
+        # Command.__call__ is the option-resolution boundary between reusable
+        # baked configuration and per-execution state.  Its local call_args is
+        # the contract passed into exactly one new RunningCommand; neither that
+        # mapping nor the resulting execution flows back into the baked Command.
+        # PSEUDOCODE AWAITCMD-005 (per-execution option resolution):
+        # INPUT: global call defaults, this Command's baked defaults, and special
+        # arguments supplied for this invocation.
+        # APPLY baked defaults, including baked return_cmd=True, to this invocation.
+        # THEN APPLY invocation arguments so an explicit call-site value retains the
+        # established ability to override a baked default.
+        # STORE the resolved values only in this invocation's call_args mapping;
+        # do not consume or mutate the baked command default for later invocations.
         call_args.update(self._partial_call_args)
         call_args.update(extracted_call_args)
 
@@ -1502,8 +1574,45 @@ class Command:
         if output_redirect_is_filename(stderr):
             stderr = open(str(stderr), "wb")
 
+        # ARCHITECTURE AWAITCMD-004, AWAITCMD-005, AWAITCMD-008, AWAITCMD-009:
+        # This is the existing Command-to-RunningCommand integration seam. It
+        # passes the normalized opt-in state into the execution owner; result
+        # selection remains at this synchronous handoff and at __await__ for a
+        # directly awaited RunningCommand, with no compatibility adapter layer.
+        # AWAITCMD-008 assigns ordinary return-type ownership to Command.__call__:
+        # this handoff may depend on the constructed RunningCommand and normalized
+        # call arguments, but it must not delegate back through RunningCommand's
+        # downstream await boundary.  The existing branch below is therefore the
+        # sole synchronous compatibility seam for the non-awaited contract.
+        #
+        # PSEUDOCODE AWAITCMD-005, AWAITCMD-008, AWAITCMD-009:
+        # INPUT: normalized call_args, where return_cmd remains false unless the
+        # caller explicitly opts in directly or through a baked command default.
+        # CREATE one new RunningCommand for this invocation through the existing
+        # execution path; never reuse a RunningCommand from another invocation. Choose
+        # synchronous waiting, asynchronous completion, iteration, piping, or
+        # background handling only from their established call arguments.
+        # IF this execution already spawned and waited AND return_cmd is false:
+        #     HAND OFF its existing string representation to the caller.
+        # ELSE:
+        #     HAND OFF this execution's own RunningCommand for its established
+        #     completion path; when directly awaited, __await__ selects this
+        #     execution's result according to its resolved return_cmd value.
+        # AWAITCMD-008 ORDINARY NON-AWAITED FLOW:
+        #     IF the resolved return_cmd value is true:
+        #         RETURN the newly created RunningCommand directly, regardless of
+        #         whether its constructor already spawned and waited for completion.
+        #         DO NOT invoke its await protocol or convert it to a string.
+        #     THEREFORE the caller receives a RunningCommand before making any
+        #     separate choice to await, inspect, or otherwise consume that object.
+        #     IF creation or ordinary completion fails before this handoff:
+        #         PROPAGATE the established failure unchanged; do not synthesize a
+        #         different result merely because return_cmd was enabled.
+        # PROPAGATE creation, completion, timeout, and exit failures unchanged.
         rc = self.__class__.RunningCommandCls(cmd, call_args, stdin, stdout, stderr)
-        if rc._spawned_and_waited and not call_args["return_cmd"]:
+        if call_args["return_cmd"]:
+            return rc
+        elif rc._spawned_and_waited:
             return str(rc)
         else:
             return rc

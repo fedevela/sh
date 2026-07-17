@@ -1728,6 +1728,253 @@ print("hello")
         asyncio.run(main())
         self.assertListEqual(alternating, [1, 2, 1, 2])
 
+    def test_AWAITCMD_001_direct_await_with_return_cmd_returns_running_command(self):
+        """AWAITCMD-001: opted-in direct await returns a RunningCommand."""
+        async def main():
+            return await python("-c", "print('complete')", _return_cmd=True)
+
+        result = asyncio.run(main())
+        self.assertIsInstance(result, sh.RunningCommand)
+
+    def test_AWAITCMD_002_direct_await_returns_same_awaited_execution(self):
+        """AWAITCMD-002: the result represents the execution that was awaited."""
+        async def main():
+            running = python("-c", "print('same execution')", _return_cmd=True)
+            return running, await running
+
+        running, result = asyncio.run(main())
+        self.assertIs(result, running)
+
+    def test_AWAITCMD_003_direct_await_resolves_after_execution_completes(self):
+        """AWAITCMD-003: opted-in direct await waits for command completion."""
+        async def main():
+            running = python(
+                "-c",
+                "import time; time.sleep(0.1); print('done')",
+                _async=True,
+                _return_cmd=True,
+            )
+
+            async def observe_running_execution():
+                self.assertTrue(running.is_alive())
+                await asyncio.sleep(0.2)
+
+            observer = asyncio.create_task(observe_running_execution())
+            result = await running
+            await observer
+            return result, result.is_alive()
+
+        result, was_alive_when_await_resolved = asyncio.run(main())
+        self.assertFalse(was_alive_when_await_resolved)
+        self.assertTrue(result._waited_until_completion)
+
+    def test_AWAITCMD_004_without_return_cmd_direct_await_returns_existing_string(self):
+        """AWAITCMD-004: non-opted-in direct await retains its string result."""
+        async def main():
+            running = pythons("-c", "print('legacy await result')", _async=True)
+
+            async def keep_loop_responsive():
+                while not running.aio_output_complete.is_set():
+                    await asyncio.sleep(0.01)
+
+            heartbeat = asyncio.create_task(keep_loop_responsive())
+            result = await running
+            await heartbeat
+            return result
+
+        result = asyncio.run(main())
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "legacy await result\n")
+
+    def test_AWAITCMD_005_baked_return_cmd_direct_await_returns_completed_running_command(
+        self,
+    ):
+        """AWAITCMD-005: baked opt-in returns the completed awaited execution."""
+        baked_python = system_python.bake(_return_cmd=True)
+
+        async def main():
+            return await baked_python("-c", "print('baked result')")
+
+        result = asyncio.run(main())
+        self.assertIsInstance(result, sh.RunningCommand)
+        self.assertFalse(result.is_alive())
+        self.assertTrue(result._waited_until_completion)
+        self.assertEqual(result.stdout, b"baked result\n")
+
+    def test_AWAITCMD_005_two_baked_executions_each_await_returns_own_completed_running_command(
+        self,
+    ):
+        """AWAITCMD-005: distinct baked executions retain distinct await results."""
+        baked_python = system_python.bake(_return_cmd=True)
+
+        async def main():
+            first_result = await baked_python("-c", "print('first')")
+            second_result = await baked_python("-c", "print('second')")
+            return first_result, second_result
+
+        first_result, second_result = asyncio.run(main())
+        self.assertIsNot(first_result, second_result)
+        self.assertIsInstance(first_result, sh.RunningCommand)
+        self.assertIsInstance(second_result, sh.RunningCommand)
+        self.assertTrue(first_result._waited_until_completion)
+        self.assertTrue(second_result._waited_until_completion)
+        self.assertEqual(first_result.stdout, b"first\n")
+        self.assertEqual(second_result.stdout, b"second\n")
+
+    def test_AWAITCMD_009_without_opt_in_execution_and_completion_remain_unchanged(self):
+        """AWAITCMD-009: non-opted-in execution and completion remain compatible."""
+        completions = []
+
+        def done(running, success, exit_code):
+            completions.append((running, success, exit_code))
+
+        async def main():
+            running = pythons(
+                "-c",
+                "print('completed normally')",
+                _async=True,
+                _done=done,
+            )
+
+            async def keep_loop_responsive():
+                while not running.aio_output_complete.is_set():
+                    await asyncio.sleep(0.01)
+
+            heartbeat = asyncio.create_task(keep_loop_responsive())
+            result = await running
+            await heartbeat
+            return running, result
+
+        running, result = asyncio.run(main())
+        self.assertEqual(result, "completed normally\n")
+        self.assertTrue(running._waited_until_completion)
+        self.assertFalse(running.is_alive())
+        self.assertEqual(completions, [(running, True, 0)])
+
+    def test_AWAITCMD_009_without_opt_in_sync_and_async_expectations_remain_unchanged(
+        self,
+    ):
+        """AWAITCMD-009: existing sync and async behavior checks remain valid."""
+        sync_result = pythons("-c", "print('sync result')")
+
+        async def get_async_result():
+            running = pythons("-c", "print('async result')", _async=True)
+
+            async def keep_loop_responsive():
+                while not running.aio_output_complete.is_set():
+                    await asyncio.sleep(0.01)
+
+            heartbeat = asyncio.create_task(keep_loop_responsive())
+            result = await running
+            await heartbeat
+            return result
+
+        async_result = asyncio.run(get_async_result())
+        self.assertIsInstance(sync_result, str)
+        self.assertEqual(sync_result, "sync result\n")
+        self.assertIsInstance(async_result, str)
+        self.assertEqual(async_result, "async result\n")
+
+    def test_AWAITCMD_006_awaited_command_exposes_completed_attributes_and_stdout(self):
+        """AWAITCMD-006: the completed result exposes attributes and stdout."""
+        async def main():
+            return await python("-c", "print('awaited output')", _return_cmd=True)
+
+        result = asyncio.run(main())
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.stdout, b"awaited output\n")
+
+    async def _await_with_process_observer(self, running):
+        async def observe_process():
+            while not running.aio_output_complete.is_set():
+                running.is_alive()
+                await asyncio.sleep(0.01)
+
+        observer = asyncio.create_task(observe_process())
+        try:
+            return await running
+        finally:
+            await observer
+
+    def test_AWAITCMD_007_await_failed_command_without_return_cmd_preserves_error_and_exit_status(
+        self,
+    ):
+        """AWAITCMD-007: legacy await failure and exit status remain preserved."""
+        async def main():
+            running = pythons(
+                "-c",
+                "import sys; print('legacy stdout'); "
+                "print('legacy stderr', file=sys.stderr); sys.exit(23)",
+                _async=True,
+            )
+            return await self._await_with_process_observer(running)
+
+        with self.assertRaises(sh.ErrorReturnCode_23) as raised:
+            asyncio.run(main())
+
+        self.assertEqual(raised.exception.exit_code, 23)
+        self.assertEqual(raised.exception.stdout, b"legacy stdout\n")
+        self.assertEqual(raised.exception.stderr, b"legacy stderr\n")
+
+    def test_AWAITCMD_007_await_failed_command_with_return_cmd_preserves_error_and_exit_status(
+        self,
+    ):
+        """AWAITCMD-007: opted-in await preserves failure and exit status."""
+        async def main():
+            running = python(
+                "-c",
+                "import sys; print('opted-in stdout'); "
+                "print('opted-in stderr', file=sys.stderr); sys.exit(24)",
+                _async=True,
+                _return_cmd=True,
+            )
+            return await self._await_with_process_observer(running)
+
+        with self.assertRaises(sh.ErrorReturnCode_24) as raised:
+            asyncio.run(main())
+
+        self.assertEqual(raised.exception.exit_code, 24)
+        self.assertEqual(raised.exception.stdout, b"opted-in stdout\n")
+        self.assertEqual(raised.exception.stderr, b"opted-in stderr\n")
+
+    def test_AWAITCMD_007_return_cmd_does_not_suppress_or_replace_await_failure(
+        self,
+    ):
+        """AWAITCMD-007: opt-in does not suppress or replace await failure."""
+        async def fail(return_cmd):
+            running = system_python(
+                "-c",
+                "import sys; print('same stdout'); "
+                "print('same stderr', file=sys.stderr); sys.exit(25)",
+                _async=True,
+                _return_cmd=return_cmd,
+            )
+            return await self._await_with_process_observer(running)
+
+        failures = []
+        for return_cmd in (False, True):
+            with self.assertRaises(sh.ErrorReturnCode_25) as raised:
+                asyncio.run(fail(return_cmd))
+            failures.append(raised.exception)
+
+        legacy_failure, opted_in_failure = failures
+        self.assertIs(type(opted_in_failure), type(legacy_failure))
+        self.assertEqual(opted_in_failure.exit_code, legacy_failure.exit_code)
+        self.assertEqual(opted_in_failure.stdout, legacy_failure.stdout)
+        self.assertEqual(opted_in_failure.stderr, legacy_failure.stderr)
+
+    def test_AWAITCMD_008_non_awaited_return_cmd_returns_running_command(self):
+        """AWAITCMD-008: ordinary non-awaited opt-in preserves RunningCommand."""
+        direct_result = system_python(
+            "-c", "print('direct ordinary result')", _return_cmd=True
+        )
+        baked_result = python("-c", "print('baked ordinary result')")
+
+        self.assertIsInstance(direct_result, sh.RunningCommand)
+        self.assertEqual(direct_result.stdout, b"direct ordinary result\n")
+        self.assertIsInstance(baked_result, sh.RunningCommand)
+        self.assertEqual(baked_result.stdout, b"baked ordinary result\n")
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

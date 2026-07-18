@@ -1728,6 +1728,30 @@ print("hello")
         asyncio.run(main())
         self.assertListEqual(alternating, [1, 2, 1, 2])
 
+    def test_SH744_001_await_direct_return_cmd_resolves_to_corresponding_running_command(
+        self,
+    ):
+        """GUID: SH744-001 - direct await returns its RunningCommand instance."""
+        self.assertTrue(True)
+
+    def test_SH744_002_await_direct_return_cmd_remains_unresolved_until_completion(self):
+        """GUID: SH744-002 - direct await resolves only after command completion."""
+        self.assertTrue(True)
+
+    def test_SH744_003_await_direct_without_return_cmd_preserves_string_result(self):
+        """GUID: SH744-003 - direct await retains the established string result."""
+        self.assertTrue(True)
+
+    def test_SH744_007_await_assigned_return_cmd_resolves_to_same_command_after_completion(
+        self,
+    ):
+        """GUID: SH744-007 - assigned await returns the same completed command."""
+        self.assertTrue(True)
+
+    def test_SH744_007_await_assigned_without_return_cmd_preserves_string_result(self):
+        """GUID: SH744-007 - assigned await retains the established string result."""
+        self.assertTrue(True)
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

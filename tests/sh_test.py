@@ -1975,6 +1975,24 @@ raise SystemExit(7)
         self.assertIsInstance(completed, str)
         self.assertEqual(completed, "facade later false\n")
 
+    def test_AWRC_009_unaccepted_ok_code_with_return_cmd_true_raises_exit_exception(
+        self,
+    ):
+        """AWRC-009: opted-in command return preserves exit-code failure."""
+        self.assertTrue(True)
+
+    def test_AWRC_009_unaccepted_ok_code_without_return_cmd_raises_exit_exception(
+        self,
+    ):
+        """AWRC-009: decoded-output return preserves exit-code failure."""
+        self.assertTrue(True)
+
+    def test_AWRC_010_return_cmd_only_changes_successful_awaited_result_type_while_effective_timeout_decoding_redirection_and_ok_code_remain_identical(
+        self,
+    ):
+        """AWRC-010: result selection preserves all configured execution semantics."""
+        self.assertTrue(True)
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

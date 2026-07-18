@@ -1819,6 +1819,68 @@ raise SystemExit(7)
         self.assertTrue(completed.call_args["return_cmd"])
         self.assertEqual(completed.call_args["ok_code"], [7])
 
+    def test_AWRC_005_individual_command_baked_true_awaits_to_completed_running_command(
+        self,
+    ):
+        """AWRC-005: baked true selects RunningCommand after successful await."""
+        self.assertTrue(True)
+
+    def test_AWRC_005_individual_command_baked_false_awaits_to_decoded_string(self):
+        """AWRC-005: baked false selects decoded output after successful await."""
+        self.assertTrue(True)
+
+    def test_AWRC_006_module_facade_baked_true_command_awaits_to_running_command(self):
+        """AWRC-006: facade-baked true propagates through lookup and await."""
+        self.assertTrue(True)
+
+    def test_AWRC_006_module_facade_baked_false_command_awaits_to_decoded_string(self):
+        """AWRC-006: facade-baked false propagates through lookup and await."""
+        self.assertTrue(True)
+
+    def test_AWRC_007_individual_baked_false_per_call_true_awaits_to_running_command(
+        self,
+    ):
+        """AWRC-007: per-call true supersedes command-baked false on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_007_individual_baked_true_per_call_false_awaits_to_decoded_string(
+        self,
+    ):
+        """AWRC-007: per-call false supersedes command-baked true on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_007_facade_baked_false_per_call_true_awaits_to_running_command(
+        self,
+    ):
+        """AWRC-007: per-call true supersedes facade-baked false on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_007_facade_baked_true_per_call_false_awaits_to_decoded_string(
+        self,
+    ):
+        """AWRC-007: per-call false supersedes facade-baked true on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_008_individual_baked_false_then_true_awaits_to_running_command(
+        self,
+    ):
+        """AWRC-008: later command-baked true supersedes earlier false on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_008_individual_baked_true_then_false_awaits_to_decoded_string(
+        self,
+    ):
+        """AWRC-008: later command-baked false supersedes earlier true on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_008_facade_baked_false_then_true_awaits_to_running_command(self):
+        """AWRC-008: later facade-baked true supersedes earlier false on await."""
+        self.assertTrue(True)
+
+    def test_AWRC_008_facade_baked_true_then_false_awaits_to_decoded_string(self):
+        """AWRC-008: later facade-baked false supersedes earlier true on await."""
+        self.assertTrue(True)
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

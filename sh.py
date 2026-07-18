@@ -887,6 +887,19 @@ class RunningCommand:
                     return chunk
 
     def __await__(self):
+        # PSEUDOCODE — direct-await successful result contract
+        # [AWRC-003] INPUT: the existing RunningCommand and its output-complete event.
+        #   AWAIT the event, yielding control while process execution or asynchronous
+        #   stdout/stderr processing remains active; do not select a result before it.
+        #   IF completion reports an existing failure, propagate that failure through
+        #   the established command path without changing its handling.
+        # [AWRC-001, AWRC-002] AFTER successful completion:
+        #   IF call_args["return_cmd"] is enabled, SELECT and RETURN self (same identity).
+        #   ELSE decode the completed stdout using the command's encoding/error policy
+        #   and RETURN the resulting string, preserving the default await contract.
+        # [AWRC-004] WHEN returning self, do not wrap or reconstruct it: the selected
+        #   instance retains completed stdout, stderr, exit_code, cmd/call arguments,
+        #   and invocation metadata already accumulated by this RunningCommand.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
             return str(self)

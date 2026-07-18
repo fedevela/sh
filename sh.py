@@ -754,6 +754,10 @@ class RunningCommand:
         the command itself as it was
         launched, or because of a timeout passed into this method.
         """
+        # ARCHITECTURE CONTRACT — completion-validation boundary
+        # [AWRC-009] RunningCommand.wait owns timeout and accepted-exit-code
+        # validation for every completion consumer, including direct await.
+        # Result-selection seams depend on this boundary and may not bypass it.
         if not self._waited_until_completion:
             # if we've been given a timeout, we need to poll is_alive()
             if timeout is not None:
@@ -905,6 +909,10 @@ class RunningCommand:
         # [AWRC-004] Completed command state remains owned by this RunningCommand;
         # no result wrapper, reconstructed command, or OProc-facing adapter belongs
         # between this seam and its caller.
+        # [AWRC-009, AWRC-010] This seam depends on wait for completion validation
+        # and on the invocation-owned call_args/process state for execution policy.
+        # It owns only successful result selection; validation, timeout, decoding,
+        # redirection, and accepted-exit-code policy must not depend on return_cmd.
         # PSEUDOCODE — direct-await successful result contract
         # [AWRC-003] INPUT: the existing RunningCommand and its output-complete event.
         #   AWAIT the event, yielding control while process execution or asynchronous

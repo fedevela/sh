@@ -887,6 +887,18 @@ class RunningCommand:
                     return chunk
 
     def __await__(self):
+        # PSEUDOCODE [SH744-001, SH744-002, SH744-003, SH744-007]
+        # ASYNC PROCEDURE resolve_awaited_result(command := self):
+        #   WAIT until command.aio_output_complete signals that output processing
+        #     and the underlying invocation have reached their completion boundary.
+        #   FINALIZE command through the established wait path so completion state,
+        #     timeout handling, and command-failure propagation remain unchanged.
+        #   IF command.call_args["return_cmd"] is true:
+        #     RETURN command itself; preserve identity whether the await expression
+        #       contains the invocation directly or a previously assigned command.
+        #   ELSE:
+        #     RETURN the established string representation of the completed command.
+        #   PROPAGATE any completion or conversion failure through the existing path.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
             return str(self)

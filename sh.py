@@ -524,6 +524,10 @@ def resolve_command_path(program):
 
 
 def resolve_command(name, command_cls, baked_args=None):
+    # ARCHITECTURE CONTRACT — facade-default adaptation seam
+    # [AWRC-006] Command lookup owns only executable resolution; this adapter
+    # transfers Environment-owned facade defaults into Command.bake so facade
+    # and individual defaults share one downstream precedence representation.
     # PSEUDOCODE — facade-to-command default propagation
     # [AWRC-006] INPUT: a command name and the module facade's baked arguments.
     #   RESOLVE the executable; IF resolution fails, RETURN no command unchanged.
@@ -1404,6 +1408,12 @@ class Command:
         overridden in __call__ or in subsequent bakes (basically setting
         defaults)"""
 
+        # ARCHITECTURE CONTRACT — immutable command-default ownership
+        # [AWRC-005, AWRC-008] Command owns baked invocation defaults. Derived
+        # Commands inherit that mapping and this seam establishes later-bake
+        # precedence without coupling facade lookup or await result selection
+        # to the history of how the defaults were supplied.
+
         # construct the base Command
         fn = type(self)(self._path)
         fn._partial = True
@@ -1474,6 +1484,12 @@ class Command:
         preprocessor = self._partial_call_args.get("arg_preprocess", None)
         if preprocessor:
             args, kwargs = preprocessor(args, kwargs)
+
+        # ARCHITECTURE CONTRACT — effective invocation handoff
+        # [AWRC-005, AWRC-006, AWRC-007, AWRC-008] Command.__call__ is the sole
+        # owner of combining baked defaults with per-call special arguments.
+        # RunningCommand receives one resolved call_args mapping, keeping await
+        # dependent on invocation state rather than on Command or facade state.
 
         # here we extract the special kwargs and override any
         # special kwargs from the possibly baked command
@@ -3461,6 +3477,11 @@ class Environment(dict):
         if k.startswith("__") and k.endswith("__"):
             raise AttributeError
 
+        # ARCHITECTURE CONTRACT — facade lookup boundary
+        # [AWRC-006] Environment owns facade defaults and passes them across the
+        # resolve_command adapter when materializing a Command; it does not own
+        # invocation precedence or await result selection.
+
         # is it a command?
         cmd = resolve_command(k, self.globs[Command.__name__], self.baked_args)
         if cmd:
@@ -3710,6 +3731,11 @@ class SelfWrapper(ModuleType):
         return self.__env[name]
 
     def bake(self, **kwargs):
+        # ARCHITECTURE CONTRACT — immutable facade-default ownership
+        # [AWRC-006, AWRC-008] SelfWrapper owns the facade-default lineage. A
+        # later facade bake overlays that mapping before a new Environment is
+        # created; command lookup then adapts the resulting defaults without a
+        # reverse dependency from Command or RunningCommand to SelfWrapper.
         baked_args = self.__env.baked_args.copy()
         baked_args.update(kwargs)
         new_sh = self.__class__(self.__self_module, baked_args)

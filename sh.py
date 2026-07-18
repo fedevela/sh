@@ -919,6 +919,19 @@ class RunningCommand:
         #   as the already resolved effective value handed off by Command.__call__;
         #   do not recalculate its individual-bake, facade-bake, later-bake, or
         #   per-call precedence at the await boundary.
+        # [AWRC-009] BEFORE inspecting return_cmd, HAND OFF to the established wait
+        #   path so it validates the completed exit code against effective ok_code.
+        #   IF that validation selects a configured sh exit exception, RAISE it and
+        #   terminate await result selection; neither self nor decoded output may be
+        #   returned on this failure path, regardless of return_cmd.
+        # [AWRC-010] PRESERVE the invocation's resolved call_args and process setup:
+        #   the output-complete handoff continues to govern configured timeout and
+        #   redirection, wait continues to govern timeout and accepted-exit-code
+        #   failures, and string conversion continues to use the existing encoding
+        #   and decode-error policy. MUTATE none of those effective settings and
+        #   introduce no alternate execution, stream, validation, or decoding path.
+        #   ONLY AFTER every established completion and failure step succeeds,
+        #   BRANCH on return_cmd to vary the successful awaited result type.
         # [AWRC-004] WHEN returning self, do not wrap or reconstruct it: the selected
         #   instance retains completed stdout, stderr, exit_code, cmd/call arguments,
         #   and invocation metadata already accumulated by this RunningCommand.

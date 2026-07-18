@@ -1732,25 +1732,70 @@ print("hello")
         self,
     ):
         """GUID: SH744-001 - direct await returns its RunningCommand instance."""
-        self.assertTrue(True)
+        async def main():
+            result = await python("-c", "print('direct')", _async=True)
+
+            self.assertIsInstance(result, sh.RunningCommand)
+            self.assertEqual(str(result), "direct\n")
+
+        asyncio.run(main())
 
     def test_SH744_002_await_direct_return_cmd_remains_unresolved_until_completion(self):
         """GUID: SH744-002 - direct await resolves only after command completion."""
-        self.assertTrue(True)
+        async def main():
+            pending = asyncio.ensure_future(
+                python(
+                    "-c",
+                    "import time; time.sleep(0.2); print('complete')",
+                    _async=True,
+                )
+            )
+
+            await asyncio.sleep(0.05)
+            self.assertFalse(pending.done())
+
+            result = await pending
+            self.assertIsInstance(result, sh.RunningCommand)
+            self.assertTrue(result._waited_until_completion)
+            self.assertEqual(str(result), "complete\n")
+
+        asyncio.run(main())
 
     def test_SH744_003_await_direct_without_return_cmd_preserves_string_result(self):
         """GUID: SH744-003 - direct await retains the established string result."""
-        self.assertTrue(True)
+        async def main():
+            result = await pythons("-c", "print('string')", _async=True)
+
+            self.assertIsInstance(result, str)
+            self.assertEqual(result, "string\n")
+
+        asyncio.run(main())
 
     def test_SH744_007_await_assigned_return_cmd_resolves_to_same_command_after_completion(
         self,
     ):
         """GUID: SH744-007 - assigned await returns the same completed command."""
-        self.assertTrue(True)
+        async def main():
+            command = python("-c", "print('assigned')", _async=True)
+            result = await command
+
+            self.assertIs(result, command)
+            self.assertTrue(result._waited_until_completion)
+            self.assertEqual(str(result), "assigned\n")
+
+        asyncio.run(main())
 
     def test_SH744_007_await_assigned_without_return_cmd_preserves_string_result(self):
         """GUID: SH744-007 - assigned await retains the established string result."""
-        self.assertTrue(True)
+        async def main():
+            command = pythons("-c", "print('assigned string')", _async=True)
+            result = await command
+
+            self.assertIsInstance(command, sh.RunningCommand)
+            self.assertIsInstance(result, str)
+            self.assertEqual(result, "assigned string\n")
+
+        asyncio.run(main())
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

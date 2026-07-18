@@ -1823,63 +1823,157 @@ raise SystemExit(7)
         self,
     ):
         """AWRC-005: baked true selects RunningCommand after successful await."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=True)
+
+        async def main():
+            running = command("-c", "print('baked true')", _async=True)
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
+        self.assertEqual(completed.exit_code, 0)
 
     def test_AWRC_005_individual_command_baked_false_awaits_to_decoded_string(self):
         """AWRC-005: baked false selects decoded output after successful await."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=False)
+
+        async def main():
+            return await command("-c", "print('baked false')", _async=True)
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "baked false\n")
 
     def test_AWRC_006_module_facade_baked_true_command_awaits_to_running_command(self):
         """AWRC-006: facade-baked true propagates through lookup and await."""
-        self.assertTrue(True)
+        facade = sh.bake(_return_cmd=True)
+
+        async def main():
+            running = facade.python("-c", "print('facade true')", _async=True)
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
+        self.assertEqual(completed.exit_code, 0)
 
     def test_AWRC_006_module_facade_baked_false_command_awaits_to_decoded_string(self):
         """AWRC-006: facade-baked false propagates through lookup and await."""
-        self.assertTrue(True)
+        facade = sh.bake(_return_cmd=False)
+
+        async def main():
+            return await facade.python("-c", "print('facade false')", _async=True)
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "facade false\n")
 
     def test_AWRC_007_individual_baked_false_per_call_true_awaits_to_running_command(
         self,
     ):
         """AWRC-007: per-call true supersedes command-baked false on await."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=False)
+
+        async def main():
+            running = command(
+                "-c", "print('call true')", _async=True, _return_cmd=True
+            )
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
 
     def test_AWRC_007_individual_baked_true_per_call_false_awaits_to_decoded_string(
         self,
     ):
         """AWRC-007: per-call false supersedes command-baked true on await."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=True)
+
+        async def main():
+            return await command(
+                "-c", "print('call false')", _async=True, _return_cmd=False
+            )
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "call false\n")
 
     def test_AWRC_007_facade_baked_false_per_call_true_awaits_to_running_command(
         self,
     ):
         """AWRC-007: per-call true supersedes facade-baked false on await."""
-        self.assertTrue(True)
+        facade = sh.bake(_return_cmd=False)
+
+        async def main():
+            running = facade.python(
+                "-c", "print('facade call true')", _async=True, _return_cmd=True
+            )
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
 
     def test_AWRC_007_facade_baked_true_per_call_false_awaits_to_decoded_string(
         self,
     ):
         """AWRC-007: per-call false supersedes facade-baked true on await."""
-        self.assertTrue(True)
+        facade = sh.bake(_return_cmd=True)
+
+        async def main():
+            return await facade.python(
+                "-c", "print('facade call false')", _async=True, _return_cmd=False
+            )
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "facade call false\n")
 
     def test_AWRC_008_individual_baked_false_then_true_awaits_to_running_command(
         self,
     ):
         """AWRC-008: later command-baked true supersedes earlier false on await."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=False).bake(_return_cmd=True)
+
+        async def main():
+            running = command("-c", "print('later true')", _async=True)
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
 
     def test_AWRC_008_individual_baked_true_then_false_awaits_to_decoded_string(
         self,
     ):
         """AWRC-008: later command-baked false supersedes earlier true on await."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=True).bake(_return_cmd=False)
+
+        async def main():
+            return await command("-c", "print('later false')", _async=True)
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "later false\n")
 
     def test_AWRC_008_facade_baked_false_then_true_awaits_to_running_command(self):
         """AWRC-008: later facade-baked true supersedes earlier false on await."""
-        self.assertTrue(True)
+        facade = sh.bake(_return_cmd=False).bake(_return_cmd=True)
+
+        async def main():
+            running = facade.python("-c", "print('facade later true')", _async=True)
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
 
     def test_AWRC_008_facade_baked_true_then_false_awaits_to_decoded_string(self):
         """AWRC-008: later facade-baked false supersedes earlier true on await."""
-        self.assertTrue(True)
+        facade = sh.bake(_return_cmd=True).bake(_return_cmd=False)
+
+        async def main():
+            return await facade.python("-c", "print('facade later false')", _async=True)
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "facade later false\n")
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

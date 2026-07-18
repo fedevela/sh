@@ -1435,6 +1435,14 @@ class Command:
         fn._partial_baked_args.extend(compile_args(args, kwargs, sep, prefix))
         return fn
 
+    @staticmethod
+    def _resolve_call_args(base_call_args, baked_call_args, invocation_call_args):
+        """Resolve invocation options in increasing order of precedence."""
+        resolved = base_call_args.copy()
+        resolved.update(baked_call_args)
+        resolved.update(invocation_call_args)
+        return resolved
+
     def __str__(self):
         baked_args = " ".join(self._partial_baked_args)
         if baked_args:
@@ -1504,8 +1512,9 @@ class Command:
         #   value. IF extraction or validation fails, propagate the existing error
         #   before constructing a RunningCommand. HAND OFF the final call_args map
         #   unchanged to the invocation-owned RunningCommand.
-        call_args.update(self._partial_call_args)
-        call_args.update(extracted_call_args)
+        call_args = self._resolve_call_args(
+            call_args, self._partial_call_args, extracted_call_args
+        )
 
         # handle a None.  this is added back only to not break the api in the
         # 1.* version.  TODO remove this in 2.0, as "ok_code", if specified,

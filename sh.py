@@ -887,6 +887,13 @@ class RunningCommand:
                     return chunk
 
     def __await__(self):
+        # ARCHITECTURE [SH744-001, SH744-002, SH744-003, SH744-007]
+        # RunningCommand owns the asynchronous result boundary: completion enters
+        # through aio_output_complete, while return_cmd remains invocation policy
+        # carried by call_args.  Result selection therefore belongs here, after the
+        # existing completion/finalization seam, rather than in Command.__call__ or
+        # the subprocess/output layers.  Direct and assigned awaits share this same
+        # object-owned boundary, so no wrapper may replace the RunningCommand identity.
         # PSEUDOCODE [SH744-001, SH744-002, SH744-003, SH744-007]
         # ASYNC PROCEDURE resolve_awaited_result(command := self):
         #   WAIT until command.aio_output_complete signals that output processing

@@ -1730,21 +1730,94 @@ print("hello")
 
     def test_AWRC_001_await_return_cmd_true_returns_same_completed_running_command(self):
         """AWRC-001: await preserves the invocation's RunningCommand identity."""
-        assert True
+        async def main():
+            running = python("-c", "print('identity')", _async=True, _return_cmd=True)
+            completed = await running
+            return running, completed
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
+        self.assertEqual(completed.exit_code, 0)
 
     def test_AWRC_002_await_without_return_cmd_returns_decoded_string_output(self):
         """AWRC-002: default await selects decoded output after completion."""
-        assert True
+        async def main():
+            running = pythons("-c", "print('decoded output')", _async=True)
+            return await running
+
+        completed = asyncio.run(main())
+        self.assertIsInstance(completed, str)
+        self.assertEqual(completed, "decoded output\n")
 
     def test_AWRC_003_await_return_cmd_remains_incomplete_until_process_and_output_finish(
         self,
     ):
         """AWRC-003: opted-in await yields until execution and output processing end."""
-        assert True
+        import threading
+
+        output_processing_started = threading.Event()
+        release_output_processing = threading.Event()
+
+        def hold_output_processing(line, stdin, process):
+            output_processing_started.set()
+            release_output_processing.wait(timeout=5)
+
+        async def main():
+            running = python(
+                "-c",
+                "print('held output')",
+                _async=True,
+                _return_cmd=True,
+                _out=hold_output_processing,
+            )
+            awaiting = asyncio.ensure_future(running)
+            try:
+                for _ in range(200):
+                    if output_processing_started.is_set():
+                        break
+                    await asyncio.sleep(0.01)
+
+                self.assertTrue(output_processing_started.is_set())
+                self.assertFalse(awaiting.done())
+            finally:
+                release_output_processing.set()
+
+            return running, await asyncio.wait_for(awaiting, timeout=5)
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
 
     def test_AWRC_004_await_returned_command_exposes_completed_state_and_metadata(self):
         """AWRC-004: returned command retains streams, exit, arguments, and metadata."""
-        assert True
+        py = create_tmp_test(
+            """
+import sys
+print("stdout marker")
+print("stderr marker", file=sys.stderr)
+raise SystemExit(7)
+"""
+        )
+
+        async def main():
+            running = python(
+                py.name,
+                "argument marker",
+                _async=True,
+                _return_cmd=True,
+                _ok_code=7,
+            )
+            return running, await running
+
+        running, completed = asyncio.run(main())
+        self.assertIs(completed, running)
+        self.assertEqual(completed.stdout, b"stdout marker\n")
+        self.assertEqual(completed.stderr, b"stderr marker\n")
+        self.assertEqual(completed.exit_code, 7)
+        self.assertEqual(completed.cmd[-2:], [py.name, "argument marker"])
+        self.assertIn("argument marker", completed.ran)
+        self.assertTrue(completed.call_args["async"])
+        self.assertTrue(completed.call_args["return_cmd"])
+        self.assertEqual(completed.call_args["ok_code"], [7])
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

@@ -1979,19 +1979,114 @@ raise SystemExit(7)
         self,
     ):
         """AWRC-009: opted-in command return preserves exit-code failure."""
-        self.assertTrue(True)
+        async def main():
+            return await system_python(
+                "-c",
+                "raise SystemExit(9)",
+                _async=True,
+                _ok_code=0,
+                _return_cmd=True,
+            )
+
+        self.assertRaises(sh.ErrorReturnCode_9, asyncio.run, main())
 
     def test_AWRC_009_unaccepted_ok_code_without_return_cmd_raises_exit_exception(
         self,
     ):
         """AWRC-009: decoded-output return preserves exit-code failure."""
-        self.assertTrue(True)
+        async def main():
+            return await system_python(
+                "-c",
+                "raise SystemExit(9)",
+                _async=True,
+                _ok_code=0,
+                _return_cmd=False,
+            )
+
+        self.assertRaises(sh.ErrorReturnCode_9, asyncio.run, main())
 
     def test_AWRC_010_return_cmd_only_changes_successful_awaited_result_type_while_effective_timeout_decoding_redirection_and_ok_code_remain_identical(
         self,
     ):
         """AWRC-010: result selection preserves all configured execution semantics."""
-        self.assertTrue(True)
+        script = (
+            "import os; "
+            "os.write(1, b'out=\\xff\\n'); "
+            "os.write(2, b'err=\\xfe\\n'); "
+            "raise SystemExit(7)"
+        )
+
+        async def invoke(return_cmd):
+            stdout = []
+            stderr = []
+
+            def capture_stdout(line, stdin, process):
+                stdout.append(line)
+
+            def capture_stderr(line, stdin, process):
+                stderr.append(line)
+
+            running = system_python(
+                "-c",
+                script,
+                _async=True,
+                _return_cmd=return_cmd,
+                _timeout=5,
+                _encoding="latin-1",
+                _decode_errors="strict",
+                _out=capture_stdout,
+                _err=capture_stderr,
+                _ok_code=7,
+            )
+            completed = await running
+            return running, completed, stdout, stderr
+
+        async def main():
+            return await asyncio.gather(invoke(False), invoke(True))
+
+        string_result, command_result = asyncio.run(main())
+
+        string_running, completed_string, string_stdout, string_stderr = string_result
+        (
+            command_running,
+            completed_command,
+            command_stdout,
+            command_stderr,
+        ) = command_result
+
+        self.assertEqual(completed_string, "")
+        self.assertIs(completed_command, command_running)
+        self.assertIsInstance(completed_string, str)
+        self.assertEqual(string_running.exit_code, 7)
+        self.assertEqual(completed_command.exit_code, 7)
+        self.assertEqual(string_stdout, ["out=ÿ\n"])
+        self.assertEqual(command_stdout, string_stdout)
+        self.assertEqual(string_stderr, ["err=þ\n"])
+        self.assertEqual(command_stderr, string_stderr)
+        for running in (string_running, command_running):
+            self.assertEqual(running.call_args["timeout"], 5)
+            self.assertEqual(running.call_args["encoding"], "latin-1")
+            self.assertEqual(running.call_args["decode_errors"], "strict")
+            self.assertEqual(running.call_args["ok_code"], [7])
+
+        async def invoke_timeout(return_cmd):
+            return await system_python(
+                "-c",
+                "import time; time.sleep(1)",
+                _async=True,
+                _return_cmd=return_cmd,
+                _timeout=0.1,
+            )
+
+        async def timeout_main():
+            return await asyncio.gather(
+                invoke_timeout(False), invoke_timeout(True), return_exceptions=True
+            )
+
+        timeout_results = asyncio.run(timeout_main())
+        self.assertTrue(
+            all(isinstance(result, sh.TimeoutException) for result in timeout_results)
+        )
 
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")

@@ -945,12 +945,16 @@ class RunningCommand:
         #   and invocation metadata already accumulated by this RunningCommand.
         async def wait_for_completion():
             await self.aio_output_complete.wait()
-            self.wait()
-            if self.call_args["return_cmd"]:
-                return self
-            return str(self)
+            return self._awaited_result()
 
         return wait_for_completion().__await__()
+
+    def _awaited_result(self):
+        """Validate completion before selecting the configured await result."""
+        self.wait()
+        if self.call_args["return_cmd"]:
+            return self
+        return str(self)
 
     def __aiter__(self):
         # maxsize is critical to making sure our queue_connector function below yields

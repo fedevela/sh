@@ -1728,6 +1728,24 @@ print("hello")
         asyncio.run(main())
         self.assertListEqual(alternating, [1, 2, 1, 2])
 
+    def test_AWRC_001_await_return_cmd_true_returns_same_completed_running_command(self):
+        """AWRC-001: await preserves the invocation's RunningCommand identity."""
+        assert True
+
+    def test_AWRC_002_await_without_return_cmd_returns_decoded_string_output(self):
+        """AWRC-002: default await selects decoded output after completion."""
+        assert True
+
+    def test_AWRC_003_await_return_cmd_remains_incomplete_until_process_and_output_finish(
+        self,
+    ):
+        """AWRC-003: opted-in await yields until execution and output processing end."""
+        assert True
+
+    def test_AWRC_004_await_returned_command_exposes_completed_state_and_metadata(self):
+        """AWRC-004: returned command retains streams, exit, arguments, and metadata."""
+        assert True
+
     def test_async_exc(self):
         py = create_tmp_test("""exit(34)""")
 

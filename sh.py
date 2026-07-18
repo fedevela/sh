@@ -524,6 +524,12 @@ def resolve_command_path(program):
 
 
 def resolve_command(name, command_cls, baked_args=None):
+    # PSEUDOCODE — facade-to-command default propagation
+    # [AWRC-006] INPUT: a command name and the module facade's baked arguments.
+    #   RESOLVE the executable; IF resolution fails, RETURN no command unchanged.
+    #   IF facade defaults exist, BAKE them into the newly resolved Command so its
+    #   _return_cmd value participates in the same later precedence flow as an
+    #   individually baked value; RETURN the resulting Command.
     path = resolve_command_path(name)
     cmd = None
     if path:
@@ -905,6 +911,10 @@ class RunningCommand:
         #   IF call_args["return_cmd"] is enabled, SELECT and RETURN self (same identity).
         #   ELSE decode the completed stdout using the command's encoding/error policy
         #   and RETURN the resulting string, preserving the default await contract.
+        # [AWRC-005, AWRC-006, AWRC-007, AWRC-008] TREAT call_args["return_cmd"]
+        #   as the already resolved effective value handed off by Command.__call__;
+        #   do not recalculate its individual-bake, facade-bake, later-bake, or
+        #   per-call precedence at the await boundary.
         # [AWRC-004] WHEN returning self, do not wrap or reconstruct it: the selected
         #   instance retains completed stdout, stderr, exit_code, cmd/call arguments,
         #   and invocation metadata already accumulated by this RunningCommand.
@@ -1400,6 +1410,13 @@ class Command:
 
         call_args, kwargs = self._extract_call_args(kwargs)
 
+        # PSEUDOCODE — ordered baked-value accumulation
+        # [AWRC-005] COPY the source Command's baked special arguments, including
+        #   return_cmd, into the derived Command as invocation defaults.
+        # [AWRC-008] THEN overlay special arguments from this bake; IF return_cmd
+        #   is present in both mappings, SELECT the value from this later bake.
+        #   IF special-argument extraction rejects a value, propagate that existing
+        #   validation failure and do not create a partially resolved precedence.
         fn._partial_call_args.update(self._partial_call_args)
         fn._partial_call_args.update(call_args)
         fn._partial_baked_args.extend(self._partial_baked_args)
@@ -1462,6 +1479,15 @@ class Command:
         # special kwargs from the possibly baked command
         extracted_call_args, kwargs = self._extract_call_args(kwargs)
 
+        # PSEUDOCODE — effective invocation value precedence
+        # [AWRC-005, AWRC-006, AWRC-008] START with library defaults, then overlay
+        #   the Command's accumulated baked defaults (whether individual or facade-
+        #   propagated, with any later bake already selected).
+        # [AWRC-007] LAST, overlay special arguments extracted from this invocation;
+        #   IF return_cmd is supplied per call, SELECT it regardless of the baked
+        #   value. IF extraction or validation fails, propagate the existing error
+        #   before constructing a RunningCommand. HAND OFF the final call_args map
+        #   unchanged to the invocation-owned RunningCommand.
         call_args.update(self._partial_call_args)
         call_args.update(extracted_call_args)
 

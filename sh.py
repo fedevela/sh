@@ -887,6 +887,14 @@ class RunningCommand:
                     return chunk
 
     def __await__(self):
+        # ARCHITECTURE CONTRACT — direct-await result seam
+        # [AWRC-003] RunningCommand owns async completion coordination through
+        # aio_output_complete; result selection remains downstream of that boundary.
+        # [AWRC-001, AWRC-002] This method is the sole integration seam that selects
+        # between the invocation-owned command and its decoded output.
+        # [AWRC-004] Completed command state remains owned by this RunningCommand;
+        # no result wrapper, reconstructed command, or OProc-facing adapter belongs
+        # between this seam and its caller.
         # PSEUDOCODE — direct-await successful result contract
         # [AWRC-003] INPUT: the existing RunningCommand and its output-complete event.
         #   AWAIT the event, yielding control while process execution or asynchronous

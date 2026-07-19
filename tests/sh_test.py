@@ -3546,13 +3546,63 @@ os.write(1, b"\\xff-after")
 
     def test_shawait_012_text_await_yields_to_sentinel_before_returning_output(self):
         """Given text mode and a running command, await lets a sentinel progress."""
-        self.assertTrue(True)
+        async def invoke():
+            progress = []
+            running = system_python(
+                "-c",
+                "import time; time.sleep(0.3); print('text complete')",
+                _async=True,
+                _return_cmd=False,
+            )
+
+            async def await_command():
+                result = await running
+                progress.append("command complete")
+                return result
+
+            async def run_sentinel():
+                await asyncio.sleep(0.05)
+                progress.append("sentinel progressed")
+
+            result, _ = await asyncio.gather(await_command(), run_sentinel())
+            return result, progress
+
+        result, progress = asyncio.run(invoke())
+
+        self.assertEqual(progress, ["sentinel progressed", "command complete"])
+        self.assertEqual(result, "text complete\n")
 
     def test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command(
         self,
     ):
         """Given command mode and a running command, await lets a sentinel progress."""
-        self.assertTrue(True)
+        async def invoke():
+            progress = []
+            running = system_python(
+                "-c",
+                "import time; time.sleep(0.3); print('command complete')",
+                _async=True,
+                _return_cmd=True,
+            )
+
+            async def await_command():
+                result = await running
+                progress.append("command complete")
+                return result
+
+            async def run_sentinel():
+                await asyncio.sleep(0.05)
+                progress.append("sentinel progressed")
+
+            result, _ = await asyncio.gather(await_command(), run_sentinel())
+            return running, result, progress
+
+        running, result, progress = asyncio.run(invoke())
+
+        self.assertEqual(progress, ["sentinel progressed", "command complete"])
+        self.assertIs(result, running)
+        self.assertEqual(result.stdout, b"command complete\n")
+        self.assertEqual(result.exit_code, 0)
 
     def test_shawait_015_repeated_await_returns_same_command_without_respawn(self):
         """Given a completed awaitable, repeated awaits preserve identity and PID."""

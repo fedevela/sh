@@ -127,24 +127,37 @@ Procedure: await_completed_async_result
 
    PROCEDURE await_completed_async_result(running_command)
      REQUIREMENT_IDS: SHAWAIT-001, SHAWAIT-002, SHAWAIT-003, SHAWAIT-004,
-                      SHAWAIT-015
+                      SHAWAIT-012, SHAWAIT-015
      VERIFICATION:
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_001_return_cmd_await_returns_constructed_running_command
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_002_await_stays_pending_until_process_and_output_complete
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_text_await_yields_to_sentinel_before_returning_output
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn
 
      PRECONDITIONS
        running_command is the invocation's original RunningCommand
        running_command.call_args contains the resolved return_cmd value
+       running_command.aio_output_complete is the asyncio.Event created on the
+         event loop that initiated this asynchronous command
 
-     WAIT
-       await running_command.aio_output_complete
+     WAIT / SUSPEND
+       select no result branch from return_cmd before completion
        IF the event is unset
-         suspend this await while the subprocess or output collection is incomplete
+         transition AWAIT_STARTED -- event unset --> AWAIT_SUSPENDED
+         await running_command.aio_output_complete.wait through asyncio
+         yield the event-loop thread so every ready task, including a concurrently
+           scheduled short-delay sentinel, can make progress while the command runs
+         perform no blocking process wait, thread join, output decode, or
+           RunningCommand return while AWAIT_SUSPENDED
+         remain suspended until the output worker schedules event.set on the
+           owning event loop after process and output completion
+         transition AWAIT_SUSPENDED -- event set --> COMPLETION_SIGNAL_RECEIVED
        ELSE
-         continue immediately; asyncio.Event remains set for repeated awaits
+         transition AWAIT_STARTED -- event already set --> COMPLETION_SIGNAL_RECEIVED
+         continue immediately because asyncio.Event remains set for repeated awaits
        END IF
 
      FINALIZE
@@ -174,6 +187,7 @@ Procedure: await_completed_async_result
        END IF
 
      RETURN
+       return no result before COMPLETION_SIGNAL_RECEIVED and successful finalization
        return result
 
      REPEATED AWAIT
@@ -214,6 +228,12 @@ Traceability Matrix
    * - SHAWAIT-004
      - ``test_shawait_004_default_await_returns_fully_decoded_text_output``
      - ``construct_async_invocation``; ``await_completed_async_result``
+   * - SHAWAIT-012
+     - ``test_shawait_012_text_await_yields_to_sentinel_before_returning_output``
+     - ``await_completed_async_result``
+   * - SHAWAIT-012
+     - ``test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command``
+     - ``await_completed_async_result``
    * - SHAWAIT-015
      - ``test_shawait_015_repeated_await_returns_same_command_without_respawn``
      - ``construct_async_invocation``; ``await_completed_async_result``

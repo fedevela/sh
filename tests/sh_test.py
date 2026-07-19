@@ -3548,52 +3548,160 @@ os.write(1, b"\\xff-after")
         self,
     ):
         """Given command-baked object mode, direct async await returns its command."""
-        self.assertTrue(True)
+        constructed = []
+        command = self.command_with_construction_seam(constructed).bake(
+            _return_cmd=True
+        )
+
+        async def invoke():
+            running = command("-c", "print('command baked')", _async=True)
+            return running, await running
+
+        running, result = asyncio.run(invoke())
+
+        self.assertEqual(constructed, [running])
+        self.assertIs(result, running)
+        self.assertEqual(result.stdout, b"command baked\n")
+        self.assertEqual(result.exit_code, 0)
 
     def test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment(
         self,
     ):
         """Given module-baked object mode, await returns its command in isolation."""
-        self.assertTrue(True)
+        baked_sh = sh.bake(_return_cmd=True)
+
+        async def invoke():
+            baked_running = baked_sh.python("-c", "print('module baked')", _async=True)
+            original_running = sh.python("-c", "print('original default')", _async=True)
+            return (
+                baked_running,
+                await baked_running,
+                await original_running,
+            )
+
+        baked_running, baked_result, original_result = asyncio.run(invoke())
+
+        self.assertIs(baked_result, baked_running)
+        self.assertEqual(baked_result.stdout, b"module baked\n")
+        self.assertEqual(baked_result.exit_code, 0)
+        self.assertIsInstance(original_result, str)
+        self.assertEqual(original_result, "original default\n")
 
     def test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type(
         self,
     ):
         """Given command rebakes, the latest value selects and can reverse the type."""
-        self.assertTrue(True)
+        text_command = system_python.bake(_return_cmd=False)
+        command_command = text_command.bake(_return_cmd=True)
+        text_command_again = command_command.bake(_return_cmd=False)
+
+        async def invoke():
+            first = text_command("-c", "print('first text')", _async=True)
+            second = command_command("-c", "print('command')", _async=True)
+            third = text_command_again("-c", "print('second text')", _async=True)
+            return second, await first, await second, await third
+
+        second, first_result, second_result, third_result = asyncio.run(invoke())
+
+        self.assertEqual(first_result, "first text\n")
+        self.assertIs(second_result, second)
+        self.assertEqual(second_result.stdout, b"command\n")
+        self.assertEqual(third_result, "second text\n")
 
     def test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type(
         self,
     ):
         """Given module rebakes, the latest value selects and can reverse the type."""
-        self.assertTrue(True)
+        text_sh = sh.bake(_return_cmd=False)
+        command_sh = text_sh.bake(_return_cmd=True)
+        text_sh_again = command_sh.bake(_return_cmd=False)
+
+        async def invoke():
+            first = text_sh.python("-c", "print('first text')", _async=True)
+            second = command_sh.python("-c", "print('command')", _async=True)
+            third = text_sh_again.python("-c", "print('second text')", _async=True)
+            return second, await first, await second, await third
+
+        second, first_result, second_result, third_result = asyncio.run(invoke())
+
+        self.assertEqual(first_result, "first text\n")
+        self.assertIs(second_result, second)
+        self.assertEqual(second_result.stdout, b"command\n")
+        self.assertEqual(third_result, "second text\n")
 
     def test_shawait_008_command_baked_true_invocation_false_await_returns_text(
         self,
     ):
         """Given command-baked object mode, invocation false returns decoded text."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=True)
+
+        async def invoke():
+            return await command(
+                "-c", "print('invocation text')", _async=True, _return_cmd=False
+            )
+
+        result = asyncio.run(invoke())
+
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "invocation text\n")
 
     def test_shawait_008_module_baked_true_invocation_false_await_returns_text(
         self,
     ):
         """Given module-baked object mode, invocation false returns decoded text."""
-        self.assertTrue(True)
+        baked_sh = sh.bake(_return_cmd=True)
+
+        async def invoke():
+            return await baked_sh.python(
+                "-c", "print('invocation text')", _async=True, _return_cmd=False
+            )
+
+        result = asyncio.run(invoke())
+
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "invocation text\n")
 
     def test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default(
         self,
     ):
         """Given command-baked text mode, invocation true returns its command once."""
-        self.assertTrue(True)
+        command = system_python.bake(_return_cmd=False)
+
+        async def invoke():
+            overridden = command(
+                "-c", "print('overridden command')", _async=True, _return_cmd=True
+            )
+            defaulted = command("-c", "print('default text')", _async=True)
+            return overridden, await overridden, await defaulted
+
+        overridden, overridden_result, default_result = asyncio.run(invoke())
+
+        self.assertIs(overridden_result, overridden)
+        self.assertEqual(overridden_result.stdout, b"overridden command\n")
+        self.assertEqual(default_result, "default text\n")
 
     def test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default(
         self,
     ):
         """Given module-baked text mode, invocation true returns its command once."""
-        self.assertTrue(True)
+        baked_sh = sh.bake(_return_cmd=False)
+
+        async def invoke():
+            overridden = baked_sh.python(
+                "-c", "print('overridden command')", _async=True, _return_cmd=True
+            )
+            defaulted = baked_sh.python("-c", "print('default text')", _async=True)
+            return overridden, await overridden, await defaulted
+
+        overridden, overridden_result, default_result = asyncio.run(invoke())
+
+        self.assertIs(overridden_result, overridden)
+        self.assertEqual(overridden_result.stdout, b"overridden command\n")
+        self.assertEqual(default_result, "default text\n")
 
     def test_shawait_012_text_await_yields_to_sentinel_before_returning_output(self):
         """Given text mode and a running command, await lets a sentinel progress."""
+
         async def invoke():
             progress = []
             running = system_python(
@@ -3624,6 +3732,7 @@ os.write(1, b"\\xff-after")
         self,
     ):
         """Given command mode and a running command, await lets a sentinel progress."""
+
         async def invoke():
             progress = []
             running = system_python(

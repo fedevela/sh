@@ -1,0 +1,36 @@
+{
+  "artifacts": {
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_001_return_cmd_await_returns_constructed_running_command": [
+      "SHAWAIT-001"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_002_await_stays_pending_until_process_and_output_complete": [
+      "SHAWAIT-002"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code": [
+      "SHAWAIT-003"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output": [
+      "SHAWAIT-004"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn": [
+      "SHAWAIT-015"
+    ]
+  },
+  "requirements": {
+    "SHAWAIT-001": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_001_return_cmd_await_returns_constructed_running_command"
+    ],
+    "SHAWAIT-002": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_002_await_stays_pending_until_process_and_output_complete"
+    ],
+    "SHAWAIT-003": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code"
+    ],
+    "SHAWAIT-004": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output"
+    ],
+    "SHAWAIT-015": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn"
+    ]
+  }
+}

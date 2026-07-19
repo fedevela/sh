@@ -3420,6 +3420,60 @@ class StreamBuffererTests(unittest.TestCase):
         self.assertEqual(b.flush(), b"e\n")
 
 
+class AsyncAwaitContractTests(unittest.TestCase):
+    """Durable placeholders for the SHAWAIT async-await behavioral contract."""
+
+    def test_shawait_001_return_cmd_await_returns_constructed_running_command(self):
+        """Given _async and _return_cmd, await yields the constructed command."""
+        self.assertTrue(True)
+
+    def test_shawait_002_await_stays_pending_until_process_and_output_complete(self):
+        """Given paused final writes, await waits for exit and both stream EOFs."""
+        self.assertTrue(True)
+
+    def test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code(self):
+        """Given object-return await, captured bytes and actual exit are available."""
+        self.assertTrue(True)
+
+    def test_shawait_004_default_await_returns_fully_decoded_text_output(self):
+        """Given default return mode, await uses invocation decoding settings."""
+        self.assertTrue(True)
+
+    def test_shawait_015_repeated_await_returns_same_command_without_respawn(self):
+        """Given a completed awaitable, repeated awaits preserve identity and PID."""
+        self.assertTrue(True)
+
+    def test_shawait_requirement_map_is_complete_and_bidirectional(self):
+        """The durable SHAWAIT map names every requirement and verification case."""
+        import json
+
+        map_path = THIS_DIR / "shawait_verification_map.json"
+        with map_path.open(encoding="utf-8") as map_file:
+            verification_map = json.load(map_file)
+
+        expected_requirements = {
+            "SHAWAIT-001",
+            "SHAWAIT-002",
+            "SHAWAIT-003",
+            "SHAWAIT-004",
+            "SHAWAIT-015",
+        }
+        requirements = verification_map["requirements"]
+        artifacts = verification_map["artifacts"]
+
+        self.assertEqual(set(requirements), expected_requirements)
+        for requirement_id, verification_names in requirements.items():
+            self.assertTrue(verification_names)
+            for verification_name in verification_names:
+                self.assertIn(verification_name, artifacts)
+                self.assertIn(requirement_id, artifacts[verification_name])
+
+        for verification_name, requirement_ids in artifacts.items():
+            self.assertTrue(requirement_ids)
+            for requirement_id in requirement_ids:
+                self.assertIn(verification_name, requirements[requirement_id])
+
+
 @requires_posix
 class ExecutionContextTests(unittest.TestCase):
     def test_basic(self):

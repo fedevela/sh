@@ -5,9 +5,115 @@ Completed Async Command Result Logic
 
 This artifact records the implementation procedure for preserving completed
 asynchronous command results.  It is intentionally expressed independently of
-Python syntax; the owning runtime loci are ``Command.__call__``,
-``RunningCommand.__await__``, ``RunningCommand.wait``, ``OProc.wait``, and
-``output_thread`` in ``sh.py``.
+Python syntax; the owning runtime loci are ``SelfWrapper.bake``,
+``Environment.__getitem__``, ``resolve_command``, ``Command.bake``,
+``Command.__call__``, ``RunningCommand.__await__``,
+``RunningCommand.wait``, ``OProc.wait``, and ``output_thread`` in ``sh.py``.
+
+Procedure: compose_command_baked_return_policy
+================================================
+
+.. code-block:: text
+
+   PROCEDURE compose_command_baked_return_policy(source_command, bake_args)
+     REQUIREMENT_IDS: SHAWAIT-005, SHAWAIT-007, SHAWAIT-008
+     VERIFICATION:
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_true_invocation_false_await_returns_text
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default
+
+     PRECONDITIONS
+       source_command is an executable Command, possibly produced by an earlier bake
+       bake_args may contain _return_cmd and ordinary command arguments
+
+     VALIDATE / NORMALIZE
+       copy bake_args before extracting special arguments
+       extract each recognized underscore-prefixed special argument and remove it
+         from the ordinary arguments
+       validate the extracted special arguments against Command._call_args
+       IF extraction, validation, or ordinary argument compilation fails
+         propagate the existing exception
+         leave source_command unchanged and return no derived Command
+       END IF
+
+     COMPOSE
+       construct a distinct derived Command for source_command._path
+       copy source_command._partial_call_args into derived._partial_call_args
+       update derived._partial_call_args with the newly extracted special arguments
+       IF both mappings contain return_cmd
+         the new bake's return_cmd replaces the earlier baked value
+       END IF
+       append source_command._partial_baked_args, then newly compiled ordinary
+         arguments, preserving normal positional bake order
+
+     TRANSITION / RETURN
+       SOURCE_COMMAND -- successful bake --> DERIVED_COMMAND
+       retain source_command and every previously derived Command unchanged
+       return DERIVED_COMMAND with its independent composed defaults
+
+     REPEATED BAKE
+       apply this procedure to the most recently derived Command
+       each successful later bake creates another Command and the latest explicit
+         return_cmd becomes that Command's baked default
+       rebaking return_cmd to an earlier value reverses only subsequent invocations
+         through the newly returned Command
+   END PROCEDURE
+
+Procedure: compose_module_baked_return_policy
+===============================================
+
+.. code-block:: text
+
+   PROCEDURE compose_module_baked_return_policy(source_environment, bake_kwargs)
+     REQUIREMENT_IDS: SHAWAIT-006, SHAWAIT-007, SHAWAIT-008
+     VERIFICATION:
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_true_invocation_false_await_returns_text
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default
+
+     PRECONDITIONS
+       source_environment is the original sh wrapper or a previously baked wrapper
+       bake_kwargs contains only candidate environment-wide command defaults
+
+     COMPOSE / VALIDATE
+       copy source_environment.baked_args into composed_baked_args
+       update composed_baked_args with bake_kwargs
+       IF both mappings contain _return_cmd
+         the new bake's _return_cmd replaces the earlier environment value
+       END IF
+       extract and validate recognized special arguments through Command
+       IF extraction or validation fails
+         propagate the existing exception
+         leave source_environment unchanged and return no derived environment
+       END IF
+
+     ISOLATE / TRANSITION
+       copy the base Command class metadata into an environment-local Command class
+       copy base Command._call_args and update the copy with composed special defaults
+       construct a distinct Environment retaining composed_baked_args
+       SOURCE_ENVIRONMENT -- successful bake --> DERIVED_ENVIRONMENT
+       do not mutate source_environment, the process-global Command defaults, or
+         commands already resolved from either environment
+
+     RESOLVE COMMAND
+       WHEN DERIVED_ENVIRONMENT receives a command-name lookup
+         resolve the executable path
+         IF no executable or builtin is resolvable
+           raise the existing CommandNotFound outcome
+         END IF
+         construct the environment-local Command
+         bake composed_baked_args into the resolved Command
+         return that Command with the environment's final return_cmd default
+       END WHEN
+
+     REPEATED BAKE
+       apply this procedure to the most recently derived Environment
+       latest explicit _return_cmd wins for commands resolved afterward
+       rebaking _return_cmd to an earlier value creates another isolated Environment
+         and reverses only later resolutions through that returned Environment
+   END PROCEDURE
 
 Procedure: construct_async_invocation
 =====================================
@@ -15,10 +121,19 @@ Procedure: construct_async_invocation
 .. code-block:: text
 
    PROCEDURE construct_async_invocation(command, positional_args, keyword_args)
-     REQUIREMENT_IDS: SHAWAIT-001, SHAWAIT-004, SHAWAIT-015
+     REQUIREMENT_IDS: SHAWAIT-001, SHAWAIT-004, SHAWAIT-005, SHAWAIT-006,
+                      SHAWAIT-007, SHAWAIT-008, SHAWAIT-015
      VERIFICATION:
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_001_return_cmd_await_returns_constructed_running_command
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_true_invocation_false_await_returns_text
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_true_invocation_false_await_returns_text
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn
 
      PRECONDITIONS
@@ -27,7 +142,11 @@ Procedure: construct_async_invocation
        invocation occurs while an asyncio event loop is running
 
      LOAD / RECEIVE
-       resolve baked special arguments, then invocation special arguments
+       begin with the command class's default special arguments
+       overlay command._partial_call_args, containing the final command-level or
+         module-level baked values
+       extract invocation special arguments from keyword_args and overlay them last
+       therefore invocation return_cmd overrides the baked default for this call only
        preserve the final resolved async, return_cmd, encoding, decode_errors,
          ok_code, timeout, stdout, and stderr settings in call_args
        compile the executable path and ordinary arguments into cmd
@@ -52,6 +171,8 @@ Procedure: construct_async_invocation
      RETURN
        return the one constructed RunningCommand regardless of return_cmd
        retain return_cmd on that same object's call_args for await-time selection
+       do not write the invocation override back to command._partial_call_args,
+         its environment, its class defaults, or any sibling Command
 
      REPEATED INVOCATION RULE
        awaiting the returned object never re-enters Command.__call__,
@@ -127,12 +248,21 @@ Procedure: await_completed_async_result
 
    PROCEDURE await_completed_async_result(running_command)
      REQUIREMENT_IDS: SHAWAIT-001, SHAWAIT-002, SHAWAIT-003, SHAWAIT-004,
+                      SHAWAIT-005, SHAWAIT-006, SHAWAIT-007, SHAWAIT-008,
                       SHAWAIT-012, SHAWAIT-015
      VERIFICATION:
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_001_return_cmd_await_returns_constructed_running_command
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_002_await_stays_pending_until_process_and_output_complete
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_true_invocation_false_await_returns_text
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_true_invocation_false_await_returns_text
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default
+       tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_text_await_yields_to_sentinel_before_returning_output
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command
        tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn
@@ -228,6 +358,38 @@ Traceability Matrix
    * - SHAWAIT-004
      - ``test_shawait_004_default_await_returns_fully_decoded_text_output``
      - ``construct_async_invocation``; ``await_completed_async_result``
+   * - SHAWAIT-005
+     - ``test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command``
+     - ``compose_command_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-006
+     - ``test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment``
+     - ``compose_module_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-007
+     - ``test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type``
+     - ``compose_command_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-007
+     - ``test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type``
+     - ``compose_module_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-008
+     - ``test_shawait_008_command_baked_true_invocation_false_await_returns_text``
+     - ``compose_command_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-008
+     - ``test_shawait_008_module_baked_true_invocation_false_await_returns_text``
+     - ``compose_module_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-008
+     - ``test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default``
+     - ``compose_command_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
+   * - SHAWAIT-008
+     - ``test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default``
+     - ``compose_module_baked_return_policy``; ``construct_async_invocation``;
+       ``await_completed_async_result``
    * - SHAWAIT-012
      - ``test_shawait_012_text_await_yields_to_sentinel_before_returning_output``
      - ``await_completed_async_result``

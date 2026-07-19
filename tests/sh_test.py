@@ -3421,27 +3421,180 @@ class StreamBuffererTests(unittest.TestCase):
 
 
 class AsyncAwaitContractTests(unittest.TestCase):
-    """Durable placeholders for the SHAWAIT async-await behavioral contract."""
+    """Behavioral witnesses for the SHAWAIT async-await contract."""
+
+    @staticmethod
+    def command_with_construction_seam(constructed):
+        class ObservedRunningCommand(sh.RunningCommand):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                constructed.append(self)
+
+        class ObservedCommand(sh.Command):
+            RunningCommandCls = ObservedRunningCommand
+
+        return ObservedCommand(sys.executable)
 
     def test_shawait_001_return_cmd_await_returns_constructed_running_command(self):
         """Given _async and _return_cmd, await yields the constructed command."""
-        self.assertTrue(True)
+        constructed = []
+        command = self.command_with_construction_seam(constructed)
+
+        async def invoke():
+            running = command("-c", "print('identity')", _async=True, _return_cmd=True)
+            result = await running
+            return running, result
+
+        running, result = asyncio.run(invoke())
+
+        self.assertEqual(constructed, [running])
+        self.assertIs(result, running)
+        self.assertIs(result, constructed[0])
 
     def test_shawait_002_await_stays_pending_until_process_and_output_complete(self):
         """Given paused final writes, await waits for exit and both stream EOFs."""
-        self.assertTrue(True)
+        marker = tempfile.NamedTemporaryFile(delete=False)
+        marker.close()
+        os.unlink(marker.name)
+        code = """
+import pathlib
+import sys
+import time
+
+sys.stdout.write("stdout-before\\n")
+sys.stdout.flush()
+sys.stderr.write("stderr-before\\n")
+sys.stderr.flush()
+pathlib.Path(sys.argv[1]).touch()
+time.sleep(0.5)
+sys.stdout.write("stdout-after\\n")
+sys.stderr.write("stderr-after\\n")
+"""
+
+        async def invoke():
+            running = system_python(
+                "-c", code, marker.name, _async=True, _return_cmd=True
+            )
+
+            async def await_running():
+                return await running
+
+            pending = asyncio.create_task(await_running())
+            for _ in range(100):
+                if os.path.exists(marker.name):
+                    break
+                await asyncio.sleep(0.01)
+            self.assertTrue(os.path.exists(marker.name))
+            self.assertFalse(pending.done())
+            result = await pending
+            return running, result
+
+        try:
+            running, result = asyncio.run(invoke())
+        finally:
+            if os.path.exists(marker.name):
+                os.unlink(marker.name)
+
+        self.assertIs(result, running)
+        self.assertEqual(running.stdout, b"stdout-before\nstdout-after\n")
+        self.assertEqual(running.stderr, b"stderr-before\nstderr-after\n")
+        self.assertEqual(running.exit_code, 0)
 
     def test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code(self):
         """Given object-return await, captured bytes and actual exit are available."""
-        self.assertTrue(True)
+        code = """
+import sys
+
+sys.stdout.buffer.write(b"captured stdout")
+sys.stderr.buffer.write(b"captured stderr")
+"""
+
+        async def invoke():
+            return await system_python("-c", code, _async=True, _return_cmd=True)
+
+        completed = asyncio.run(invoke())
+
+        self.assertEqual(completed.stdout, b"captured stdout")
+        self.assertEqual(completed.stderr, b"captured stderr")
+        self.assertEqual(completed.exit_code, 0)
 
     def test_shawait_004_default_await_returns_fully_decoded_text_output(self):
         """Given default return mode, await uses invocation decoding settings."""
-        self.assertTrue(True)
+        code = """
+import os
+import time
+
+os.write(1, b"before-")
+time.sleep(0.2)
+os.write(1, b"\\xff-after")
+"""
+
+        async def invoke():
+            return await system_python(
+                "-c",
+                code,
+                _async=True,
+                _return_cmd=False,
+                _encoding="latin-1",
+                _decode_errors="strict",
+            )
+
+        result = asyncio.run(invoke())
+
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "before-ÿ-after")
 
     def test_shawait_015_repeated_await_returns_same_command_without_respawn(self):
         """Given a completed awaitable, repeated awaits preserve identity and PID."""
-        self.assertTrue(True)
+        counter = tempfile.NamedTemporaryFile(delete=False)
+        counter.write(b"0")
+        counter.close()
+        code = """
+import pathlib
+import sys
+
+counter = pathlib.Path(sys.argv[1])
+invocation = int(counter.read_text()) + 1
+counter.write_text(str(invocation))
+print(f"invocation-{invocation}")
+print(f"stderr-{invocation}", file=sys.stderr)
+"""
+
+        async def invoke():
+            running = system_python(
+                "-c", code, counter.name, _async=True, _return_cmd=True
+            )
+            pid = running.pid
+            first = await running
+            first_state = (
+                running.pid,
+                running.stdout,
+                running.stderr,
+                running.exit_code,
+            )
+            second = await running
+            second_state = (
+                running.pid,
+                running.stdout,
+                running.stderr,
+                running.exit_code,
+            )
+            return running, pid, first, second, first_state, second_state
+
+        try:
+            running, pid, first, second, first_state, second_state = asyncio.run(
+                invoke()
+            )
+            with open(counter.name, encoding="utf-8") as counter_file:
+                invocation_count = counter_file.read()
+        finally:
+            os.unlink(counter.name)
+
+        self.assertIs(first, running)
+        self.assertIs(second, running)
+        self.assertEqual(first_state, second_state)
+        self.assertEqual(running.pid, pid)
+        self.assertEqual(invocation_count, "1")
 
     def test_shawait_requirement_map_is_complete_and_bidirectional(self):
         """The durable SHAWAIT map names every requirement and verification case."""

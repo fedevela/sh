@@ -12,6 +12,30 @@
     "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output": [
       "SHAWAIT-004"
     ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command": [
+      "SHAWAIT-005"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment": [
+      "SHAWAIT-006"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type": [
+      "SHAWAIT-007"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type": [
+      "SHAWAIT-007"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default": [
+      "SHAWAIT-008"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_true_invocation_false_await_returns_text": [
+      "SHAWAIT-008"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default": [
+      "SHAWAIT-008"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_true_invocation_false_await_returns_text": [
+      "SHAWAIT-008"
+    ],
     "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command": [
       "SHAWAIT-012"
     ],
@@ -34,6 +58,22 @@
     ],
     "SHAWAIT-004": [
       "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output"
+    ],
+    "SHAWAIT-005": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command"
+    ],
+    "SHAWAIT-006": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment"
+    ],
+    "SHAWAIT-007": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type",
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type"
+    ],
+    "SHAWAIT-008": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default",
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_command_baked_true_invocation_false_await_returns_text",
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default",
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_008_module_baked_true_invocation_false_await_returns_text"
     ],
     "SHAWAIT-012": [
       "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command",

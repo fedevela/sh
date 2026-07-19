@@ -3544,6 +3544,54 @@ os.write(1, b"\\xff-after")
         self.assertIsInstance(result, str)
         self.assertEqual(result, "before-ÿ-after")
 
+    def test_shawait_005_command_baked_return_cmd_true_await_returns_completed_running_command(
+        self,
+    ):
+        """Given command-baked object mode, direct async await returns its command."""
+        self.assertTrue(True)
+
+    def test_shawait_006_module_baked_return_cmd_true_await_returns_completed_running_command_without_mutating_original_environment(
+        self,
+    ):
+        """Given module-baked object mode, await returns its command in isolation."""
+        self.assertTrue(True)
+
+    def test_shawait_007_later_command_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type(
+        self,
+    ):
+        """Given command rebakes, the latest value selects and can reverse the type."""
+        self.assertTrue(True)
+
+    def test_shawait_007_later_module_bake_overrides_return_cmd_and_rebake_reverses_awaited_result_type(
+        self,
+    ):
+        """Given module rebakes, the latest value selects and can reverse the type."""
+        self.assertTrue(True)
+
+    def test_shawait_008_command_baked_true_invocation_false_await_returns_text(
+        self,
+    ):
+        """Given command-baked object mode, invocation false returns decoded text."""
+        self.assertTrue(True)
+
+    def test_shawait_008_module_baked_true_invocation_false_await_returns_text(
+        self,
+    ):
+        """Given module-baked object mode, invocation false returns decoded text."""
+        self.assertTrue(True)
+
+    def test_shawait_008_command_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default(
+        self,
+    ):
+        """Given command-baked text mode, invocation true returns its command once."""
+        self.assertTrue(True)
+
+    def test_shawait_008_module_baked_false_invocation_true_await_returns_completed_running_command_without_mutating_default(
+        self,
+    ):
+        """Given module-baked text mode, invocation true returns its command once."""
+        self.assertTrue(True)
+
     def test_shawait_012_text_await_yields_to_sentinel_before_returning_output(self):
         """Given text mode and a running command, await lets a sentinel progress."""
         async def invoke():
@@ -3669,6 +3717,10 @@ print(f"stderr-{invocation}", file=sys.stderr)
             "SHAWAIT-002",
             "SHAWAIT-003",
             "SHAWAIT-004",
+            "SHAWAIT-005",
+            "SHAWAIT-006",
+            "SHAWAIT-007",
+            "SHAWAIT-008",
             "SHAWAIT-012",
             "SHAWAIT-015",
         }

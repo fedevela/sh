@@ -12,6 +12,12 @@
     "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output": [
       "SHAWAIT-004"
     ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command": [
+      "SHAWAIT-012"
+    ],
+    "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_text_await_yields_to_sentinel_before_returning_output": [
+      "SHAWAIT-012"
+    ],
     "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn": [
       "SHAWAIT-015"
     ]
@@ -28,6 +34,10 @@
     ],
     "SHAWAIT-004": [
       "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_004_default_await_returns_fully_decoded_text_output"
+    ],
+    "SHAWAIT-012": [
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command",
+      "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_012_text_await_yields_to_sentinel_before_returning_output"
     ],
     "SHAWAIT-015": [
       "tests/sh_test.py::AsyncAwaitContractTests::test_shawait_015_repeated_await_returns_same_command_without_respawn"

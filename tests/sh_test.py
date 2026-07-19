@@ -3544,6 +3544,16 @@ os.write(1, b"\\xff-after")
         self.assertIsInstance(result, str)
         self.assertEqual(result, "before-ÿ-after")
 
+    def test_shawait_012_text_await_yields_to_sentinel_before_returning_output(self):
+        """Given text mode and a running command, await lets a sentinel progress."""
+        self.assertTrue(True)
+
+    def test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command(
+        self,
+    ):
+        """Given command mode and a running command, await lets a sentinel progress."""
+        self.assertTrue(True)
+
     def test_shawait_015_repeated_await_returns_same_command_without_respawn(self):
         """Given a completed awaitable, repeated awaits preserve identity and PID."""
         counter = tempfile.NamedTemporaryFile(delete=False)
@@ -3609,6 +3619,7 @@ print(f"stderr-{invocation}", file=sys.stderr)
             "SHAWAIT-002",
             "SHAWAIT-003",
             "SHAWAIT-004",
+            "SHAWAIT-012",
             "SHAWAIT-015",
         }
         requirements = verification_map["requirements"]

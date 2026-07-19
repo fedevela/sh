@@ -24,7 +24,10 @@ awaiting event-loop tasks.
 
 No new result object or completion future is introduced.  A second object
 would weaken the identity guarantee in SHAWAIT-001 and create a second owner
-for the process state required by SHAWAIT-003 and SHAWAIT-015.
+for the process state required by SHAWAIT-003 and SHAWAIT-015.  It would also
+duplicate the cooperative suspension seam required by SHAWAIT-012: both result
+modes must await the same completion event before either result branch is
+selected.
 
 Loci and Ownership
 ==================
@@ -58,9 +61,16 @@ completion nor await-time result selection.
 -------------------------------------------------------------
 
 **Requirements:** SHAWAIT-001, SHAWAIT-002, SHAWAIT-003, SHAWAIT-004,
-SHAWAIT-015.
+SHAWAIT-012, SHAWAIT-015.
 
-**Verification:** all five named ``AsyncAwaitContractTests`` obligations.
+**Verification:**
+``test_shawait_001_return_cmd_await_returns_constructed_running_command``,
+``test_shawait_002_await_stays_pending_until_process_and_output_complete``,
+``test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code``,
+``test_shawait_004_default_await_returns_fully_decoded_text_output``,
+``test_shawait_012_text_await_yields_to_sentinel_before_returning_output``,
+``test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command``,
+and ``test_shawait_015_repeated_await_returns_same_command_without_respawn``.
 
 **Procedures:** ``construct_async_invocation`` and
 ``await_completed_async_result``.
@@ -68,12 +78,20 @@ SHAWAIT-015.
 ``RunningCommand`` owns invocation identity, the retained ``call_args``, the
 single ``OProc`` reference, and the await result policy.  Construction creates
 one unset ``aio_output_complete`` event when invoked on a running event loop.
-``__await__`` consumes that event, delegates finalization to ``wait()``, and
-then chooses its result from the retained ``return_cmd`` value:
+``__await__`` first suspends by awaiting that event.  While it is unset,
+``asyncio.Event.wait`` yields the event-loop thread so unrelated ready tasks,
+including the SHAWAIT-012 sentinel, can run.  Only after the output worker has
+scheduled the event transition does ``__await__`` delegate finalization to
+``wait()`` and choose its result from the retained ``return_cmd`` value:
 
 * true returns ``self``;
 * false decodes the completed ``OProc.stdout`` bytes with the retained
   ``encoding`` and ``decode_errors`` values.
+
+The ``return_cmd`` flag is therefore a post-completion result policy, not a
+choice of waiting mechanism.  Neither branch may call the blocking ``wait()``
+boundary, decode stdout, or return ``self`` before the asyncio completion signal
+has resumed the awaiting task.
 
 The event is a level-triggered completion latch: once set, later awaits pass
 immediately.  ``RunningCommand._waited_until_completion`` makes finalization
@@ -112,13 +130,17 @@ read the authoritative completed state from their one ``OProc``.
 ``output_thread`` and the completion callback
 ---------------------------------------------
 
-**Requirements:** SHAWAIT-002, SHAWAIT-003.
+**Requirements:** SHAWAIT-002, SHAWAIT-003, SHAWAIT-012.
 
 **Verification:**
 ``test_shawait_002_await_stays_pending_until_process_and_output_complete`` and
-``test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code``.
+``test_shawait_003_completed_command_exposes_stdout_stderr_and_exit_code``, with
+both SHAWAIT-012 sentinel cases observing its event-loop handoff through
+``RunningCommand.__await__``.
 
-**Procedure:** ``publish_async_output_completion``.
+**Procedures:** ``publish_async_output_completion`` owns publication for
+SHAWAIT-002 and SHAWAIT-003; ``await_completed_async_result`` consumes that
+existing publication seam for SHAWAIT-012.
 
 ``output_thread`` owns polling and closing the managed stdout and stderr
 ``StreamReader`` instances.  The readers append retained bytes to the deques
@@ -156,6 +178,13 @@ is the narrow, payload-free completion callback.  There is no persisted data,
 transaction boundary, queue, external event, adapter, authorization boundary,
 or migration.
 
+The thread-to-loop callback is asynchronous publication; event consumption by
+``RunningCommand.__await__`` is cooperative asyncio suspension.  The later
+``RunningCommand.wait`` call is synchronous finalization, but is sequenced only
+after output completion, when the worker has already observed process exit and
+closed the managed readers.  This ordering prevents either SHAWAIT-012 return
+mode from blocking the event-loop thread while the command remains active.
+
 State and Lifecycle
 ===================
 
@@ -167,6 +196,7 @@ The owning loci preserve this lifecycle::
        -> OProc observes and records process exit
        -> output_thread closes both readers
        -> event-loop callback sets asyncio.Event
+       -> suspended await task becomes runnable alongside other asyncio work
        -> RunningCommand.__await__ calls idempotent wait()
        -> timeout or exit-code error, otherwise object-or-text result selection
        -> repeated await reuses the set event and completed RunningCommand
@@ -186,6 +216,10 @@ the repository's existing substitution seam.  The pause/final-write case
 observes the event-loop boundary; completed properties observe ``OProc`` state;
 the text case observes retained decoding policy; and the repeated-await case
 observes identity, PID, bytes, exit code, and an invocation side effect.
+The two SHAWAIT-012 cases share the same scheduling arrangement and separately
+observe that a short-delay sentinel progresses before text selection and before
+``RunningCommand`` identity selection.  They are the test seam for the rule
+that ``return_cmd`` cannot bypass cooperative event consumption.
 ``tests/shawait_verification_map.json`` remains the bidirectional canonical
 requirement-to-verification index.
 
@@ -195,7 +229,7 @@ Implementation ordering is:
    cases while retaining their names and verification map.
 #. Change only ``RunningCommand.__await__`` to call the established finalization
    boundary and select ``self`` or decoded stdout from ``call_args``.
-#. Run the five focused requirements plus map integrity, then the existing
+#. Run the seven focused requirement cases plus map integrity, then the existing
    neighboring async success and error tests.
 
 This order exposes regressions in completion timing, exception translation,
@@ -235,6 +269,18 @@ Requirement-to-Architecture Map
        ``await_completed_async_result``
      - ``Command.__call__`` retained invocation policy;
        ``RunningCommand.__await__`` decoding branch
+   * - SHAWAIT-012;
+       ``test_shawait_012_text_await_yields_to_sentinel_before_returning_output``
+     - ``await_completed_async_result``
+     - ``RunningCommand.__await__`` cooperative event consumption before
+       ``RunningCommand.wait`` and text decoding; ``output_thread`` callback as
+       the thread-safe completion publisher
+   * - SHAWAIT-012;
+       ``test_shawait_012_return_cmd_await_yields_to_sentinel_before_returning_completed_command``
+     - ``await_completed_async_result``
+     - ``RunningCommand.__await__`` cooperative event consumption before
+       ``RunningCommand.wait`` and identity return; ``output_thread`` callback
+       as the thread-safe completion publisher
    * - SHAWAIT-015;
        ``test_shawait_015_repeated_await_returns_same_command_without_respawn``
      - ``construct_async_invocation``;
